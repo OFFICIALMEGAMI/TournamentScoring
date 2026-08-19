@@ -1,7 +1,8 @@
-# Tournament Brackets
+# Tourney
 
-A single-elimination bracket board. No build step, no server, no dependencies —
-open `index.html` in a browser and it works.
+Tournament scoring for teams of two: a single-elimination bracket and a points
+counter. No build step, no server, no dependencies - open `index.html` in a
+browser and it works.
 
 ## Run it
 
