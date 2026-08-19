@@ -11,12 +11,16 @@ let state = {
   teams: [],
   picks: {},                       // bracket: match key -> winning team id
   scores: {},                      // points counter: team id -> running total
+  life: { count: 4, start: 40, useEntrants: false, players: [] },   // commander life
+  darts: { game: '501', count: 2, useEntrants: false, doubleOut: true,
+           mickeySet: 6, remaining: [], history: [], marks: [], winner: null },
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
 };
 let editingId = null;                 // team currently being edited, or null
 let draftPhotos = [null, null];       // photos held in the form
+let draftSize = 1;                    // 1 = solo entrant (default), 2 = pair
 let zoom = 1;
 let lastSignature = '';               // bracket shape — entrance anims only on change
 let lastChampion = null;              // to fire confetti once per new champion
@@ -26,7 +30,7 @@ let lastBoardSig = '';                // scoreboard team set — entrance anim o
 
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear'];
+const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear', 'mtg', 'darts', 'beerpong'];
 
 /* Each skin renames the furniture. Missing semi/quarter falls back to Round N. */
 const THEME_WORDS = {
@@ -41,12 +45,18 @@ const THEME_WORDS = {
   christmas: { round: 'Round', semi: 'Semifinals', final: 'Grand Finale', match: 'Match',
                decided: 'Wrapped', champ: 'Top of the Tree', leader: 'Nice list' },
   newyear:   { round: 'Round', semi: 'Semifinals', final: 'Countdown', match: 'Match',
-               decided: 'Done', champ: 'Toast of the Night', leader: 'Frontrunner' }
+               decided: 'Done', champ: 'Toast of the Night', leader: 'Frontrunner' },
+  mtg:       { round: 'Round', semi: 'Semifinals', final: 'Final Duel', match: 'Duel',
+               decided: 'Resolved', champ: 'Archmage', leader: 'Ahead' },
+  darts:     { round: 'Leg', final: 'Final Leg', match: 'Board', decided: 'Checked out',
+               champ: 'Checkout', leader: 'On a finish' },
+  beerpong:  { round: 'Round', semi: 'Semifinals', final: 'Last Cup', match: 'Table',
+               decided: 'Sunk', champ: 'Last Cup Standing', leader: 'Hot hand' }
 };
 const words = () => THEME_WORDS[state.theme] || THEME_WORDS.aurora;
 
 /* What rides the connector line up to the next round. */
-const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨' };
+const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨', mtg: '🃏', darts: '🎯', beerpong: '🏓' };
 
 const THEME_TOASTS = {
   aurora: '✨ Aurora restored',
@@ -54,7 +64,10 @@ const THEME_TOASTS = {
   music: '🎵 Music — cue the next track',
   halloween: '🎃 Halloween — something stirs',
   christmas: '🎄 Christmas — let it snow',
-  newyear: '🎆 New Year — ten, nine, eight…'
+  newyear: '🎆 New Year — ten, nine, eight…',
+  mtg: '🃏 MTG — shuffle up and deal',
+  darts: '🎯 Darts — game on',
+  beerpong: '🥤 Beer pong — rack them up'
 };
 
 /* ---------------- storage ---------------- */
@@ -70,6 +83,8 @@ function load() {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
+        life: normalizeLife(parsed.life),
+        darts: normalizeDarts(parsed.darts),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -90,16 +105,24 @@ function save() {
 }
 
 function normalizeTeam(t) {
-  const p = Array.isArray(t.players) ? t.players : [];
-  return {
-    id: t.id || uid(),
-    name: String(t.name || 'Team'),
-    players: [0, 1].map(i => ({
-      name: String((p[i] && p[i].name) || ''),
-      photo: (p[i] && p[i].photo) || null
-    }))
-  };
+  const raw = Array.isArray(t.players) ? t.players : [];
+  const players = [0, 1].map(i => ({
+    name: String((raw[i] && raw[i].name) || ''),
+    photo: (raw[i] && raw[i].photo) || null
+  }));
+
+  // size 1 = a solo entrant, 2 = a pair. Older saves have no size field, so
+  // infer it from whether a second person was ever filled in.
+  let size = Number(t.size);
+  if (size !== 1 && size !== 2) {
+    size = (players[1].name || players[1].photo) ? 2 : 1;
+  }
+  if (size === 1) players.length = 1;
+
+  return { id: t.id || uid(), name: String(t.name || 'Entrant'), size, players };
 }
+
+const isSolo = team => team.players.length === 1;
 
 function normalizeScores(raw) {
   const out = {};
@@ -228,7 +251,8 @@ const avatarsHTML = (team, cls) => `<div class="${cls}">${team.players.map(avata
 
 function playerLine(team) {
   const names = team.players.map(p => p.name).filter(Boolean);
-  return names.length ? names.join(' & ') : 'No participant names';
+  if (names.length) return names.join(' & ');
+  return isSolo(team) ? 'No name yet' : 'No participant names';
 }
 
 /* ---------------- bracket model ---------------- */
@@ -372,7 +396,9 @@ function renderPoints() {
   $('#pointsEmpty').hidden = any;
   $('.points-bar').hidden = !any;
   $('#scoreboard').hidden = !any;
-  $$('.step-opt').forEach(b => {
+  // scoped to this view's own switches - .step-opt is shared with the entry-type
+  // switch on the Entrants form, which must not be reset from here
+  $$('.step-opt[data-step-pick], .step-opt[data-sort-pick]').forEach(b => {
     const on = b.dataset.stepPick
       ? Number(b.dataset.stepPick) === state.step
       : b.dataset.sortPick === state.sort;
@@ -558,6 +584,628 @@ function wirePoints() {
     save();
     renderPoints();
     toast('Counters back to zero');
+  });
+}
+
+/* ---------------- commander life counter ---------------- */
+
+const LIFE_COUNTS = [2, 3, 4, 5, 6];
+const LIFE_STARTS = [20, 30, 40];
+const LETHAL_CMD = 21;                       // commander damage that kills outright
+
+/* Which way each seat faces, so players read their own total from their chair. */
+const SEAT_ROTATIONS = {
+  2: [180, 0],
+  3: [90, 270, 0],
+  4: [90, 270, 90, 270],
+  5: [90, 270, 90, 270, 0],
+  6: [90, 270, 90, 270, 90, 270]
+};
+
+function normalizeLife(raw) {
+  const out = { count: 4, start: 40, useEntrants: false, players: [] };
+  if (raw && typeof raw === 'object') {
+    if (LIFE_COUNTS.includes(Number(raw.count))) out.count = Number(raw.count);
+    const s = Math.round(Number(raw.start));
+    if (Number.isFinite(s) && s > 0 && s <= 999) out.start = s;
+    out.useEntrants = !!raw.useEntrants;
+    if (Array.isArray(raw.players)) {
+      out.players = raw.players.slice(0, 6).map(p => ({
+        life: Number.isFinite(Number(p && p.life)) ? Math.round(Number(p.life)) : out.start,
+        cmd: Array.isArray(p && p.cmd) ? p.cmd.slice(0, 6).map(n => Math.max(0, Math.round(Number(n) || 0))) : []
+      }));
+    }
+  }
+  syncLifeSeats(out);
+  return out;
+}
+
+/** Keeps the seat array the same length as the chosen player count. */
+function syncLifeSeats(life) {
+  while (life.players.length < life.count) {
+    life.players.push({ life: life.start, cmd: [] });
+  }
+  life.players.length = life.count;
+  for (const p of life.players) {
+    while (p.cmd.length < life.count) p.cmd.push(0);
+    p.cmd.length = life.count;
+  }
+}
+
+function resetLife() {
+  state.life.players = [];
+  syncLifeSeats(state.life);
+  for (const p of state.life.players) {
+    p.life = state.life.start;
+    p.cmd = new Array(state.life.count).fill(0);
+  }
+}
+
+/** Seat labels come from the entrant list when asked for, otherwise Player N. */
+function seatName(i) {
+  if (state.life.useEntrants && state.teams[i]) return state.teams[i].name;
+  return `Player ${i + 1}`;
+}
+
+function seatTeam(i) {
+  return state.life.useEntrants ? state.teams[i] || null : null;
+}
+
+/* ---------------- render: life ---------------- */
+
+function renderLife() {
+  syncLifeSeats(state.life);
+
+  $$('.step-opt[data-seats-pick]').forEach(b => {
+    const on = Number(b.dataset.seatsPick) === state.life.count;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $$('.step-opt[data-start-pick]').forEach(b => {
+    const on = Number(b.dataset.startPick) === state.life.start;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('#useEntrants').checked = state.life.useEntrants;
+  $('#useEntrants').disabled = state.teams.length < 2;
+
+  const grid = $('#lifeGrid');
+  const rotations = SEAT_ROTATIONS[state.life.count] || SEAT_ROTATIONS[4];
+  grid.dataset.count = state.life.count;
+  grid.innerHTML = state.life.players.map((seat, i) => seatHTML(seat, i, rotations[i] || 0)).join('');
+  updateLifeInfo();
+}
+
+function seatHTML(seat, i, rot) {
+  const team = seatTeam(i);
+  const dead = seat.life <= 0;
+  const cmdOut = seat.cmd.some((n, from) => from !== i && n >= LETHAL_CMD);
+
+  return `
+    <div class="life-panel rot-${rot} ${dead || cmdOut ? 'down' : ''}" data-seat="${i}">
+      <div class="life-inner">
+        <button class="life-step minus" data-delta="-1" aria-label="${esc(seatName(i))} minus one">&minus;</button>
+
+        <div class="life-mid">
+          <div class="life-name">
+            ${team ? avatarsHTML(team, 'av') : ''}
+            <span>${esc(seatName(i))}</span>
+          </div>
+          <div class="life-total">${seat.life}</div>
+          ${dead ? '<div class="life-out">Out</div>' : cmdOut ? '<div class="life-out">Cmd</div>' : ''}
+          <div class="cmd-strip">
+            ${seat.cmd.map((n, from) => from === i ? '' : `
+              <button class="cmd-chip ${n >= LETHAL_CMD ? 'lethal' : n ? 'hit' : ''}"
+                      data-from="${from}"
+                      title="Commander damage from ${esc(seatName(from))} - click +1, right-click -1">${n}</button>`).join('')}
+          </div>
+        </div>
+
+        <button class="life-step plus" data-delta="1" aria-label="${esc(seatName(i))} plus one">+</button>
+      </div>
+    </div>`;
+}
+
+function updateLifeInfo() {
+  const alive = state.life.players.filter(p => p.life > 0 && !p.cmd.some(n => n >= LETHAL_CMD)).length;
+  const lowest = Math.min(...state.life.players.map(p => p.life));
+  $('#lifeInfo').innerHTML =
+    `<b>${state.life.count}</b> players from <b>${state.life.start}</b> life · ` +
+    (alive <= 1 ? '<b>game over</b>' : `${alive} still in · lowest ${lowest}`);
+}
+
+/** Repaints one seat in place - the grid is never rebuilt mid-game. */
+function paintSeat(i) {
+  const panel = $(`#lifeGrid .life-panel[data-seat="${i}"]`);
+  const seat = state.life.players[i];
+  if (!panel || !seat) return;
+
+  const dead = seat.life <= 0;
+  const cmdOut = seat.cmd.some((n, from) => from !== i && n >= LETHAL_CMD);
+  panel.classList.toggle('down', dead || cmdOut);
+  panel.querySelector('.life-total').textContent = seat.life;
+
+  const out = panel.querySelector('.life-out');
+  const label = dead ? 'Out' : cmdOut ? 'Cmd' : '';
+  if (label && !out) {
+    const el = document.createElement('div');
+    el.className = 'life-out';
+    el.textContent = label;
+    panel.querySelector('.life-total').after(el);
+  } else if (label && out) {
+    out.textContent = label;
+  } else if (!label && out) {
+    out.remove();
+  }
+
+  panel.querySelectorAll('.cmd-chip').forEach(chip => {
+    const n = seat.cmd[Number(chip.dataset.from)] || 0;
+    chip.textContent = n;
+    chip.classList.toggle('hit', n > 0 && n < LETHAL_CMD);
+    chip.classList.toggle('lethal', n >= LETHAL_CMD);
+  });
+  updateLifeInfo();
+}
+
+function nudgeLife(i, delta, origin) {
+  const seat = state.life.players[i];
+  if (!seat) return;
+  seat.life += delta;
+  save();
+  paintSeat(i);
+
+  const total = $(`#lifeGrid .life-panel[data-seat="${i}"] .life-total`);
+  if (total && !calm) {
+    total.classList.remove('up', 'down-tick');
+    void total.offsetWidth;
+    total.classList.add(delta > 0 ? 'up' : 'down-tick');
+  }
+  if (delta > 0 && origin && !calm) {
+    spray({ x: origin.x, y: origin.y, count: 7, power: 5, size: .5, decay: .06 });
+  }
+}
+
+function wireLife() {
+  const grid = $('#lifeGrid');
+
+  grid.addEventListener('click', e => {
+    const step = e.target.closest('.life-step');
+    if (step) {
+      const i = Number(step.closest('.life-panel').dataset.seat);
+      nudgeLife(i, Number(step.dataset.delta), { x: e.clientX, y: e.clientY });
+      return;
+    }
+    const chip = e.target.closest('.cmd-chip');
+    if (chip) {
+      const i = Number(chip.closest('.life-panel').dataset.seat);
+      const from = Number(chip.dataset.from);
+      const seat = state.life.players[i];
+      seat.cmd[from] = Math.max(0, (seat.cmd[from] || 0) + 1);
+      seat.life -= 1;                       // commander damage takes life too
+      save();
+      paintSeat(i);
+    }
+  });
+
+  // right-click a chip to take commander damage back off
+  grid.addEventListener('contextmenu', e => {
+    const chip = e.target.closest('.cmd-chip');
+    if (!chip) return;
+    e.preventDefault();
+    const i = Number(chip.closest('.life-panel').dataset.seat);
+    const from = Number(chip.dataset.from);
+    const seat = state.life.players[i];
+    if (!seat.cmd[from]) return;
+    seat.cmd[from] -= 1;
+    seat.life += 1;
+    save();
+    paintSeat(i);
+  });
+
+  $$('.step-opt[data-seats-pick]').forEach(b => b.addEventListener('click', () => {
+    state.life.count = Number(b.dataset.seatsPick);
+    syncLifeSeats(state.life);
+    save();
+    renderLife();
+  }));
+
+  $$('.step-opt[data-start-pick]').forEach(b => b.addEventListener('click', () => {
+    state.life.start = Number(b.dataset.startPick);
+    resetLife();
+    save();
+    renderLife();
+    toast(`Everyone back to ${state.life.start}`);
+  }));
+
+  $('#useEntrants').addEventListener('change', () => {
+    state.life.useEntrants = $('#useEntrants').checked;
+    save();
+    renderLife();
+  });
+
+  $('#btnResetLife').addEventListener('click', async () => {
+    const touched = state.life.players.some(p => p.life !== state.life.start || p.cmd.some(Boolean));
+    if (touched) {
+      const ok = await askConfirm('Start a new game?', {
+        sub: `Everyone goes back to ${state.life.start} life and commander damage clears.`,
+        okLabel: 'New game'
+      });
+      if (!ok) return;
+    }
+    resetLife();
+    save();
+    renderLife();
+    toast('New game');
+  });
+}
+
+/* ---------------- darts: 301 / 501 / mickey mouse ---------------- */
+
+const DART_GAMES = ['501', '301', 'mickey'];
+const MICKEY_SETS = {
+  6: [20, 19, 18, 17, 16, 15, 'B'],
+  9: [20, 19, 18, 17, 16, 15, 14, 13, 12, 'B']
+};
+const QUICK_SCORES = [26, 41, 45, 60, 81, 100, 140, 180];
+const MARKS = ['', '/', 'X', '⊗'];          // 0-3 marks, third one closes
+
+let dartEntry = '';                              // digits being typed, not persisted
+
+function normalizeDarts(raw) {
+  const out = {
+    game: '501', count: 2, useEntrants: false, doubleOut: true, mickeySet: 6,
+    remaining: [], history: [], marks: [], winner: null
+  };
+  if (raw && typeof raw === 'object') {
+    if (DART_GAMES.includes(raw.game)) out.game = raw.game;
+    if (Number(raw.count) >= 2 && Number(raw.count) <= 6) out.count = Math.round(Number(raw.count));
+    out.useEntrants = !!raw.useEntrants;
+    out.doubleOut = raw.doubleOut !== false;
+    out.mickeySet = Number(raw.mickeySet) === 9 ? 9 : 6;
+    if (Array.isArray(raw.remaining)) out.remaining = raw.remaining.map(n => Math.round(Number(n) || 0));
+    if (Array.isArray(raw.history)) {
+      out.history = raw.history
+        .filter(t => t && typeof t === 'object')
+        .map(t => ({ p: Math.round(Number(t.p) || 0), v: Math.round(Number(t.v) || 0), bust: !!t.bust }));
+    }
+    if (Array.isArray(raw.marks)) out.marks = raw.marks.map(m => (m && typeof m === 'object' ? { ...m } : {}));
+    if (Number.isInteger(raw.winner)) out.winner = raw.winner;
+  }
+  syncDarts(out);
+  return out;
+}
+
+/** Keeps the per-player arrays the right length for the current game. */
+function syncDarts(d) {
+  const start = d.game === 'mickey' ? 0 : Number(d.game);
+  while (d.remaining.length < d.count) d.remaining.push(start);
+  d.remaining.length = d.count;
+  while (d.marks.length < d.count) d.marks.push({});
+  d.marks.length = d.count;
+  if (d.winner !== null && d.winner >= d.count) d.winner = null;
+}
+
+function resetDarts() {
+  const d = state.darts;
+  d.remaining = [];
+  d.marks = [];
+  d.history = [];
+  d.winner = null;
+  syncDarts(d);
+  if (d.game !== 'mickey') d.remaining = d.remaining.map(() => Number(d.game));
+  dartEntry = '';
+}
+
+const dartTargets = () => MICKEY_SETS[state.darts.mickeySet];
+const targetLabel = t => (t === 'B' ? 'Bull' : t);
+
+function dartName(i) {
+  if (state.darts.useEntrants && state.teams[i]) return state.teams[i].name;
+  return `Player ${i + 1}`;
+}
+
+/** Whose turn it is: the history length rotates through the players. */
+function activePlayer() {
+  const d = state.darts;
+  if (d.winner !== null) return null;
+  return d.history.length % d.count;
+}
+
+function dartStats(i) {
+  const turns = state.darts.history.filter(t => t.p === i);
+  const scored = turns.reduce((n, t) => n + (t.bust ? 0 : t.v), 0);
+  return {
+    turns: turns.length,
+    scored,
+    avg: turns.length ? Math.round((scored / turns.length) * 10) / 10 : 0,
+    last: turns.length ? turns[turns.length - 1] : null
+  };
+}
+
+/** All marks filled on every target. */
+function mickeyClosed(i) {
+  return dartTargets().every(t => (state.darts.marks[i][t] || 0) >= 3);
+}
+
+/* ---------------- render: darts ---------------- */
+
+function renderDarts() {
+  const d = state.darts;
+  syncDarts(d);
+
+  $$('.step-opt[data-game-pick]').forEach(b => {
+    const on = b.dataset.gamePick === d.game;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $$('.step-opt[data-dartcount-pick]').forEach(b => {
+    const on = Number(b.dataset.dartcountPick) === d.count;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('#dartsEntrants').checked = d.useEntrants;
+  $('#dartsEntrants').disabled = state.teams.length < 2;
+  $('#doubleOut').checked = d.doubleOut;
+
+  const mickey = d.game === 'mickey';
+  $('#countdownPanel').hidden = mickey;
+  $('#mickeyPanel').hidden = !mickey;
+  $('#doubleOutWrap').hidden = mickey;
+  $('#mickeySetWrap').hidden = !mickey;
+  $$('.step-opt[data-mickey-pick]').forEach(b => {
+    const on = Number(b.dataset.mickeyPick) === d.mickeySet;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  if (mickey) renderMickey();
+  else renderCountdown();
+  renderDartWinner();
+  updateDartsInfo();
+}
+
+function updateDartsInfo() {
+  const d = state.darts;
+  const name = d.game === 'mickey' ? 'Mickey Mouse' : d.game;
+  const turn = activePlayer();
+  $('#dartsInfo').innerHTML = d.winner !== null
+    ? `<b>${esc(dartName(d.winner))}</b> takes it - ${esc(name)}`
+    : `<b>${esc(name)}</b> · ${d.count} players` +
+      (turn !== null ? ` · <b>${esc(dartName(turn))}</b> to throw` : '');
+}
+
+function renderCountdown() {
+  const d = state.darts;
+  const turn = activePlayer();
+  $('#dartPlayers').innerHTML = d.remaining.map((rem, i) => {
+    const s = dartStats(i);
+    const finish = rem <= 170 && rem > 1;
+    return `
+      <div class="dart-player ${i === turn ? 'active' : ''} ${d.winner === i ? 'won' : ''}" data-player="${i}">
+        <div class="dp-name">${esc(dartName(i))}</div>
+        <div class="dp-score">${rem}</div>
+        <div class="dp-meta">
+          <span>${s.turns} turn${s.turns === 1 ? '' : 's'}</span>
+          <span>avg ${s.avg}</span>
+          ${s.last ? `<span class="${s.last.bust ? 'bust' : ''}">last ${s.last.bust ? 'bust' : s.last.v}</span>` : ''}
+        </div>
+        ${finish ? '<div class="dp-finish">on a finish</div>' : ''}
+      </div>`;
+  }).join('');
+
+  $('#dartEntry').textContent = dartEntry || '0';
+  $('#btnDartUndo').disabled = !d.history.length;
+  $$('#dartKeypad .key').forEach(k => (k.disabled = d.winner !== null));
+  $('#quickScores').innerHTML = QUICK_SCORES
+    .map(v => `<button class="btn ghost sm quick" data-quick="${v}" ${d.winner !== null ? 'disabled' : ''}>${v}</button>`)
+    .join('');
+}
+
+function renderMickey() {
+  const d = state.darts;
+  const targets = dartTargets();
+  const head = d.marks.map((_, i) =>
+    `<th class="${activePlayer() === i ? 'active' : ''}">${esc(dartName(i))}</th>`).join('');
+
+  $('#mickeyTable').innerHTML = `
+    <thead><tr><th class="target-col">Target</th>${head}</tr></thead>
+    <tbody>
+      ${targets.map(t => `
+        <tr>
+          <th class="target-col">${targetLabel(t)}</th>
+          ${d.marks.map((m, i) => {
+            const n = m[t] || 0;
+            return `<td>
+              <button class="mark ${n >= 3 ? 'closed' : n ? 'part' : ''}"
+                      data-player="${i}" data-target="${t}"
+                      title="Click for a mark, right-click to take one off">${MARKS[n]}</button>
+            </td>`;
+          }).join('')}
+        </tr>`).join('')}
+      <tr class="mickey-total">
+        <th class="target-col">Closed</th>
+        ${d.marks.map((m, i) => {
+          const done = targets.filter(t => (m[t] || 0) >= 3).length;
+          return `<td class="${done === targets.length ? 'all' : ''}">${done}/${targets.length}</td>`;
+        }).join('')}
+      </tr>
+    </tbody>`;
+}
+
+function renderDartWinner() {
+  const box = $('#dartWinner');
+  const d = state.darts;
+  if (d.winner === null) { box.hidden = true; box.innerHTML = ''; return; }
+  const team = d.useEntrants ? state.teams[d.winner] : null;
+  box.hidden = false;
+  box.innerHTML = `
+    <span class="cup" id="dartCup" title="Celebrate again">\u{1F3AF}</span>
+    <div>
+      <div class="lbl">${d.game === 'mickey' ? 'All closed' : 'Checkout'}</div>
+      <div class="cname">${esc(dartName(d.winner))}</div>
+      <div class="cplayers">${d.game === 'mickey'
+        ? 'Every target closed'
+        : `${d.game} finished in ${dartStats(d.winner).turns} turns`}</div>
+    </div>
+    ${team ? avatarsHTML(team, 'cav') : ''}`;
+  $('#dartCup').addEventListener('click', fireConfetti);
+}
+
+/* ---------------- darts interactions ---------------- */
+
+function commitDartScore(origin) {
+  const d = state.darts;
+  if (d.winner !== null) return;
+  const value = Number(dartEntry || '0');
+  if (!Number.isFinite(value) || value < 0 || value > 180) {
+    toast('A turn is 0 to 180');
+    dartEntry = '';
+    renderCountdown();
+    return;
+  }
+  const i = activePlayer();
+  const rem = d.remaining[i] - value;
+  const bust = rem < 0 || (d.doubleOut && rem === 1);
+
+  if (bust) {
+    d.history.push({ p: i, v: value, bust: true });
+    toast(`Bust - ${dartName(i)} stays on ${d.remaining[i]}`);
+  } else {
+    d.remaining[i] = rem;
+    d.history.push({ p: i, v: value, bust: false });
+    if (rem === 0) {
+      d.winner = i;
+      fireConfetti();
+    } else if (origin) {
+      spray({ x: origin.x, y: origin.y, count: 8, power: 5, size: .5, decay: .05 });
+    }
+  }
+  dartEntry = '';
+  save();
+  renderDarts();
+}
+
+function undoDart() {
+  const d = state.darts;
+  const last = d.history.pop();
+  if (!last) return;
+  if (!last.bust) d.remaining[last.p] += last.v;
+  d.winner = null;
+  dartEntry = '';
+  save();
+  renderDarts();
+  toast('Turn undone');
+}
+
+function wireDarts() {
+  $$('.step-opt[data-game-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.game = b.dataset.gamePick;
+    resetDarts();
+    save();
+    renderDarts();
+    toast(state.darts.game === 'mickey' ? 'Mickey Mouse - close every target' : `New ${state.darts.game}`);
+  }));
+
+  $$('.step-opt[data-dartcount-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.count = Number(b.dataset.dartcountPick);
+    resetDarts();
+    save();
+    renderDarts();
+  }));
+
+  $$('.step-opt[data-mickey-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.mickeySet = Number(b.dataset.mickeyPick);
+    resetDarts();
+    save();
+    renderDarts();
+  }));
+
+  $('#dartsEntrants').addEventListener('change', () => {
+    state.darts.useEntrants = $('#dartsEntrants').checked;
+    save();
+    renderDarts();
+  });
+
+  $('#doubleOut').addEventListener('change', () => {
+    state.darts.doubleOut = $('#doubleOut').checked;
+    save();
+  });
+
+  $('#dartKeypad').addEventListener('click', e => {
+    const key = e.target.closest('.key');
+    if (!key) return;
+    const k = key.dataset.key;
+    if (k === 'back') dartEntry = dartEntry.slice(0, -1);
+    else if (k === 'clear') dartEntry = '';
+    else if (k === 'enter') return commitDartScore({ x: e.clientX, y: e.clientY });
+    else if (dartEntry.length < 3) dartEntry = (dartEntry + k).replace(/^0+(?=\d)/, '');
+    $('#dartEntry').textContent = dartEntry || '0';
+  });
+
+  $('#quickScores').addEventListener('click', e => {
+    const q = e.target.closest('.quick');
+    if (!q) return;
+    dartEntry = q.dataset.quick;
+    commitDartScore({ x: e.clientX, y: e.clientY });
+  });
+
+  $('#btnDartUndo').addEventListener('click', undoDart);
+
+  $('#btnDartReset').addEventListener('click', async () => {
+    const started = state.darts.history.length || state.darts.marks.some(m => Object.keys(m).length);
+    if (started) {
+      const ok = await askConfirm('Start a new leg?', {
+        sub: 'Scores, marks and turn history all clear.',
+        okLabel: 'New leg'
+      });
+      if (!ok) return;
+    }
+    resetDarts();
+    save();
+    renderDarts();
+    toast('New leg');
+  });
+
+  // mickey marks
+  $('#mickeyTable').addEventListener('click', e => {
+    const mark = e.target.closest('.mark');
+    if (!mark || state.darts.winner !== null) return;
+    const i = Number(mark.dataset.player);
+    const t = mark.dataset.target;
+    const marks = state.darts.marks[i];
+    marks[t] = Math.min(3, (marks[t] || 0) + 1);
+    if (mickeyClosed(i)) { state.darts.winner = i; fireConfetti(); }
+    save();
+    renderDarts();
+  });
+
+  $('#mickeyTable').addEventListener('contextmenu', e => {
+    const mark = e.target.closest('.mark');
+    if (!mark) return;
+    e.preventDefault();
+    const i = Number(mark.dataset.player);
+    const t = mark.dataset.target;
+    const marks = state.darts.marks[i];
+    marks[t] = Math.max(0, (marks[t] || 0) - 1);
+    if (state.darts.winner === i && !mickeyClosed(i)) state.darts.winner = null;
+    save();
+    renderDarts();
+  });
+
+  // typing works too, when the darts view is the one on screen
+  document.addEventListener('keydown', e => {
+    if (!$('#view-darts').classList.contains('is-active')) return;
+    if (state.darts.game === 'mickey' || !$('#modal').hidden) return;
+    if (e.target.matches('input,textarea')) return;
+    if (/^[0-9]$/.test(e.key)) {
+      if (dartEntry.length < 3) dartEntry = (dartEntry + e.key).replace(/^0+(?=\d)/, '');
+      $('#dartEntry').textContent = dartEntry || '0';
+    } else if (e.key === 'Backspace') {
+      dartEntry = dartEntry.slice(0, -1);
+      $('#dartEntry').textContent = dartEntry || '0';
+    } else if (e.key === 'Enter') {
+      commitDartScore(null);
+    }
   });
 }
 
@@ -806,7 +1454,10 @@ const PALETTES = {
   music: ['#e2482a', '#0e7c73', '#1d1a15', '#fffdf9', '#d97706', '#8c1c13'],
   halloween: ['#ff7518', '#8b5cf6', '#7cb518', '#f4f0ea', '#1a1020', '#ff9d4d'],
   christmas: ['#c1121f', '#2d6a4f', '#ffffff', '#f1e3c8', '#95d5b2', '#9b2226'],
-  newyear: ['#e8eaf0', '#4dabff', '#ff5fa2', '#8b5cf6', '#ffffff', '#5eead4']
+  newyear: ['#e8eaf0', '#4dabff', '#ff5fa2', '#8b5cf6', '#ffffff', '#5eead4'],
+  mtg: ['#8c2f26', '#1f5fa8', '#1f6b3a', '#6b4b1f', '#f3e9cf', '#2a2438'],
+  darts: ['#c8102e', '#1a7a44', '#f2ead6', '#3fbf6f', '#0d1712', '#8c1024'],
+  beerpong: ['#d0342c', '#1f6fb2', '#f2b23e', '#fffaf2', '#2f9e57', '#7b4a24']
 };
 const confettiColors = () => PALETTES[state.theme] || PALETTES.aurora;
 let particles = [];
@@ -1020,10 +1671,19 @@ function wireDrag() {
 /* ---------------- form ---------------- */
 
 function renderForm() {
-  $('#formHeading').textContent = editingId ? 'Edit team' : 'Add a team';
-  $('#formChip').textContent = editingId ? 'editing' : '2 players';
-  $('#btnSaveTeam').textContent = editingId ? 'Save changes' : 'Add team';
+  const solo = draftSize === 1;
+  const noun = solo ? 'player' : 'team';
+  $('#formHeading').textContent = `${editingId ? 'Edit' : 'Add a'} ${noun}`;
+  $('#btnSaveTeam').textContent = editingId ? 'Save changes' : `Add ${noun}`;
   $('#btnCancelEdit').hidden = !editingId;
+  $('#playersWrap').classList.toggle('solo', solo);
+  $('#player2').hidden = solo;
+  $('#pname1').placeholder = solo ? 'Player name' : 'Participant 1';
+  $$('.step-opt[data-size-pick]').forEach(b => {
+    const on = Number(b.dataset.sizePick) === draftSize;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
   [1, 2].forEach(slot => {
     const drop = $(`.photo-drop[data-drop="${slot}"]`);
     const img = drop.querySelector('.preview');
@@ -1037,6 +1697,7 @@ function renderForm() {
 function resetForm() {
   editingId = null;
   draftPhotos = [null, null];
+  draftSize = 1;
   $('#teamName').value = '';
   $$('.p-name').forEach(i => (i.value = ''));
   $('#formError').hidden = true;
@@ -1047,10 +1708,11 @@ function startEdit(id) {
   const t = teamById(id);
   if (!t) return;
   editingId = id;
-  draftPhotos = [t.players[0].photo, t.players[1].photo];
+  draftSize = t.players.length;
+  draftPhotos = [t.players[0].photo, t.players[1] ? t.players[1].photo : null];
   $('#teamName').value = t.name;
   $('.p-name[data-name="1"]').value = t.players[0].name;
-  $('.p-name[data-name="2"]').value = t.players[1].name;
+  $('.p-name[data-name="2"]').value = t.players[1] ? t.players[1].name : '';
   renderForm();
   showView('teams');
   $('.form-card').scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' });
@@ -1063,14 +1725,21 @@ function saveTeamFromForm() {
   const p2 = $('.p-name[data-name="2"]').value.trim();
   const err = $('#formError');
 
-  if (!name && !p1 && !p2) {
-    err.textContent = 'Give the team a name, or at least one participant.';
+  const solo = draftSize === 1;
+  if (!name && !p1 && (solo || !p2)) {
+    err.textContent = solo
+      ? 'Give the player a name.'
+      : 'Give the team a name, or at least one participant.';
     err.hidden = false;
     return;
   }
+  const players = solo
+    ? [{ name: p1, photo: draftPhotos[0] }]
+    : [{ name: p1, photo: draftPhotos[0] }, { name: p2, photo: draftPhotos[1] }];
   const payload = {
-    name: name || [p1, p2].filter(Boolean).join(' & '),
-    players: [{ name: p1, photo: draftPhotos[0] }, { name: p2, photo: draftPhotos[1] }]
+    name: name || (solo ? p1 : [p1, p2].filter(Boolean).join(' & ')),
+    size: draftSize,
+    players
   };
 
   if (editingId) {
@@ -1108,6 +1777,8 @@ function renderAll() {
   renderTeams();
   renderBracket();
   renderPoints();
+  renderLife();
+  renderDarts();
 }
 
 /* ---------------- simulate ---------------- */
@@ -1157,6 +1828,8 @@ function importJSON(file) {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
+        life: normalizeLife(parsed.life),
+        darts: normalizeDarts(parsed.darts),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -1250,7 +1923,9 @@ function wire() {
       const team = teamById(id);
       if (!team) return;
       const ok = await askConfirm(`Delete ${team.name}?`, {
-        sub: 'The team and both photos are removed, and the bracket re-seeds.'
+        sub: isSolo(team)
+          ? 'The player and their photo are removed, and the bracket re-seeds.'
+          : 'The team and both photos are removed, and the bracket re-seeds.'
       });
       if (!ok) return;
       row.classList.add('removing');
@@ -1360,9 +2035,16 @@ function wire() {
 
   $$('.theme-opt').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themePick)));
 
+  $$('.step-opt[data-size-pick]').forEach(b => b.addEventListener('click', () => {
+    draftSize = Number(b.dataset.sizePick);
+    renderForm();
+  }));
+
   wireDrag();
   wireTrace();
   wirePoints();
+  wireLife();
+  wireDarts();
 }
 
 /* ---------------- boot ---------------- */

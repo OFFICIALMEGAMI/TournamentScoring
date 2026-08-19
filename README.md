@@ -14,7 +14,7 @@ then open http://localhost:5599
 
 ## What it does
 
-- **Teams of two** — team name plus both participant names and a photo each.
+- **Solo or pairs** - each entrant is one person or a team of two, chosen per entry — team name plus both participant names and a photo each.
   Photos are downscaled to 400px JPEG in the browser before being stored.
 - **Seeding** — the list order is the seeding. Drag rows to re-seed, or use the
   arrows. `Shuffle` randomizes and clears results.
@@ -26,6 +26,18 @@ then open http://localhost:5599
   score and glides cards into place. The clear leader gets a badge, and totals can
   go negative for penalties. Clicking `+` updates that one card in place — the board
   is never rebuilt, so nothing scrolls or re-animates under your cursor.
+- **Darts** - three games on their own page. **501** and **301** count down from a
+  typed turn total with a keypad and quick-score buttons; going below zero (or
+  landing on one with double out) is a bust and the score stays put. **Mickey Mouse**
+  is the marks game: close 20 down to 15 (or 12) plus the bull, three marks each,
+  first to close everything wins. Undo covers the last turn, and averages, turn
+  counts and an on-a-finish flag show on every player card.
+- **MTG** - a Commander life counter. Two to six seats, each panel rotated to face
+  its own chair, starting life 20/30/40, and big tap targets at both ends of every
+  panel for gaining and losing life. The chips are commander damage from each
+  opponent: click to add one (it takes a life with it), right-click to take it back,
+  and 21 from a single player knocks you out. Optionally seat your entrants so the
+  panels carry their names and photos. Seat colours follow the active theme.
 - **Simulate** — fills the remaining matches with random winners, one at a time.
 - **Winning a match** — the slot sweeps green, the photos hop, a small burst
   fires from the click, and a glowing token travels the connector line into the
@@ -37,7 +49,7 @@ then open http://localhost:5599
 
 ## Themes
 
-Six skins, toggled on the Teams page and remembered with the rest of the state:
+Nine skins, toggled on the Teams page and remembered with the rest of the state:
 
 - **Aurora** — the default: dark glass, violet/fuchsia/cyan gradients.
 - **Grand Prix** — a racing skin: clear sky with a checkered finish-line strip,
@@ -63,6 +75,17 @@ Six skins, toggled on the Teams page and remembered with the rest of the state:
   loop, silver-and-blue deco palette with Cinzel type. Scores are struck on a
   **silver medallion** with a sweeping sheen. The final is the Countdown and the
   winner is the Toast of the Night.
+
+- **MTG** — a card-frame skin: dark table, parchment panels inside dark-wood
+  borders, Cinzel serif type, crimson accents, and the five colours of mana as the
+  life-counter seats. Rounds are duels and the champion is the Archmage.
+
+- **Darts** — a pub chalkboard: dark slate-green board, cream chalk type in Caveat,
+  chalk-line texture and a dartboard hanging behind the content in board red and
+  green. Rounds are legs, matches are boards, and the champion gets a Checkout.
+- **Beer pong** — a wooden table seen from above, with a rack of red cups at one end
+  and blue at the other. Cream cards with hard outlines, Bangers lettering, and
+  cup-red accents. Rounds end in the Last Cup and results are Sunk.
 
 ## Keyboard
 

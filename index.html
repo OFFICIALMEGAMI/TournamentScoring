@@ -6,7 +6,7 @@
 <title>Tourney</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;600;700&family=Baloo+2:wght@600;700;800&family=Bebas+Neue&family=Archivo:wght@500;600;700&family=Creepster&family=Mountains+of+Christmas:wght@700&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;600;700&family=Baloo+2:wght@600;700;800&family=Bebas+Neue&family=Archivo:wght@500;600;700&family=Creepster&family=Caveat:wght@600;700&family=Bangers&family=Mountains+of+Christmas:wght@700&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -39,10 +39,16 @@
   <nav class="tabs" role="tablist">
     <span class="tab-glider" id="tabGlider"></span>
     <button class="tab is-active" data-view="teams" role="tab">
-      <span class="tab-ico">👥</span> Teams <span class="pill" id="teamCount">0</span>
+      <span class="tab-ico">👥</span> Entrants <span class="pill" id="teamCount">0</span>
     </button>
     <button class="tab" data-view="bracket" role="tab">
       <span class="tab-ico">🗺️</span> Bracket
+    </button>
+    <button class="tab" data-view="life" role="tab">
+      <span class="tab-ico">🃏</span> MTG
+    </button>
+    <button class="tab" data-view="darts" role="tab">
+      <span class="tab-ico">🎯</span> Darts
     </button>
     <button class="tab" data-view="points" role="tab">
       <span class="tab-ico">💯</span> Points
@@ -84,6 +90,15 @@
         <button class="theme-opt" data-theme-pick="newyear" role="radio" aria-checked="false">
           <span class="sw sw-newyear"></span> New Year
         </button>
+        <button class="theme-opt" data-theme-pick="mtg" role="radio" aria-checked="false">
+          <span class="sw sw-mtg"></span> MTG
+        </button>
+        <button class="theme-opt" data-theme-pick="darts" role="radio" aria-checked="false">
+          <span class="sw sw-darts"></span> Darts
+        </button>
+        <button class="theme-opt" data-theme-pick="beerpong" role="radio" aria-checked="false">
+          <span class="sw sw-beerpong"></span> Beer pong
+        </button>
       </div>
     </div>
 
@@ -92,7 +107,10 @@
       <div class="glass form-card" style="--i:0">
         <div class="card-head">
           <h2 id="formHeading">Add a team</h2>
-          <span class="chip" id="formChip">2 players</span>
+          <span class="step-switch" role="radiogroup" aria-label="Entry type">
+            <button class="step-opt is-on" data-size-pick="1" role="radio" aria-checked="true">Solo</button>
+            <button class="step-opt" data-size-pick="2" role="radio" aria-checked="false">Pair</button>
+          </span>
         </div>
 
         <label class="field">
@@ -100,7 +118,7 @@
           <input id="teamName" placeholder="e.g. The Underdogs" maxlength="40" autocomplete="off">
         </label>
 
-        <div class="players">
+        <div class="players" id="playersWrap">
           <div class="player">
             <div class="photo-drop" data-drop="1" tabindex="0" role="button" aria-label="Add photo for participant 1">
               <img class="preview" alt="">
@@ -108,10 +126,10 @@
               <button class="photo-clear" type="button" title="Remove photo" hidden>✕</button>
               <span class="ring"></span>
             </div>
-            <input class="p-name" data-name="1" placeholder="Participant 1" maxlength="30" autocomplete="off">
+            <input class="p-name" data-name="1" placeholder="Participant 1" id="pname1" maxlength="30" autocomplete="off">
             <input type="file" class="p-file" data-file="1" accept="image/*" hidden>
           </div>
-          <div class="player">
+          <div class="player" id="player2">
             <div class="photo-drop" data-drop="2" tabindex="0" role="button" aria-label="Add photo for participant 2">
               <img class="preview" alt="">
               <span class="photo-hint"><b>＋</b>photo</span>
@@ -145,7 +163,7 @@
         <ul class="team-list" id="teamList"></ul>
         <div class="empty" id="teamsEmpty">
           <span class="empty-ico">🎽</span>
-          Nothing here yet — build your first team on the left.
+          Nothing here yet — add your first entrant on the left.
         </div>
 
         <button class="btn primary wide" id="btnGoBracket">Build the bracket <span class="arrow">→</span></button>
@@ -182,6 +200,117 @@
     <div class="empty" id="bracketEmpty">
       <span class="empty-ico">🗺️</span>
       Add at least two teams and the bracket draws itself.
+    </div>
+  </section>
+
+  <!-- ================= LIFE (commander) ================= -->
+  <section id="view-life" class="view">
+    <div class="life-bar glass">
+      <div class="bracket-info" id="lifeInfo"></div>
+      <div class="head-actions">
+        <span class="step-switch" role="radiogroup" aria-label="Players">
+          <button class="step-opt" data-seats-pick="2" role="radio" aria-checked="false">2</button>
+          <button class="step-opt" data-seats-pick="3" role="radio" aria-checked="false">3</button>
+          <button class="step-opt is-on" data-seats-pick="4" role="radio" aria-checked="true">4</button>
+          <button class="step-opt" data-seats-pick="5" role="radio" aria-checked="false">5</button>
+          <button class="step-opt" data-seats-pick="6" role="radio" aria-checked="false">6</button>
+        </span>
+        <span class="step-switch" role="radiogroup" aria-label="Starting life">
+          <button class="step-opt" data-start-pick="20" role="radio" aria-checked="false">20</button>
+          <button class="step-opt" data-start-pick="30" role="radio" aria-checked="false">30</button>
+          <button class="step-opt is-on" data-start-pick="40" role="radio" aria-checked="true">40</button>
+        </span>
+        <label class="use-entrants">
+          <input type="checkbox" id="useEntrants"> Use entrants
+        </label>
+        <button class="btn primary" id="btnResetLife">New game</button>
+      </div>
+    </div>
+
+    <div class="life-grid" id="lifeGrid" data-count="4"></div>
+
+    <p class="hint" style="text-align:center;margin-top:12px">
+      Tap the ends of a panel to gain or lose life. The small chips are commander damage
+      from each opponent - click to add one (it takes a life too), right-click to take it back.
+      21 commander damage from one player knocks you out.
+    </p>
+  </section>
+
+  <!-- ================= DARTS ================= -->
+  <section id="view-darts" class="view">
+    <div class="darts-bar glass">
+      <div class="bracket-info" id="dartsInfo"></div>
+      <div class="head-actions">
+        <span class="step-switch" role="radiogroup" aria-label="Game">
+          <button class="step-opt is-on" data-game-pick="501" role="radio" aria-checked="true">501</button>
+          <button class="step-opt" data-game-pick="301" role="radio" aria-checked="false">301</button>
+          <button class="step-opt" data-game-pick="mickey" role="radio" aria-checked="false">Mickey Mouse</button>
+        </span>
+        <span class="step-switch" role="radiogroup" aria-label="Players">
+          <button class="step-opt is-on" data-dartcount-pick="2" role="radio" aria-checked="true">2</button>
+          <button class="step-opt" data-dartcount-pick="3" role="radio" aria-checked="false">3</button>
+          <button class="step-opt" data-dartcount-pick="4" role="radio" aria-checked="false">4</button>
+          <button class="step-opt" data-dartcount-pick="5" role="radio" aria-checked="false">5</button>
+          <button class="step-opt" data-dartcount-pick="6" role="radio" aria-checked="false">6</button>
+        </span>
+        <span id="doubleOutWrap">
+          <label class="use-entrants"><input type="checkbox" id="doubleOut"> Double out</label>
+        </span>
+        <span id="mickeySetWrap" hidden>
+          <span class="step-switch" role="radiogroup" aria-label="Targets">
+            <button class="step-opt is-on" data-mickey-pick="6" role="radio" aria-checked="true">20-15</button>
+            <button class="step-opt" data-mickey-pick="9" role="radio" aria-checked="false">20-12</button>
+          </span>
+        </span>
+        <label class="use-entrants"><input type="checkbox" id="dartsEntrants"> Use entrants</label>
+        <button class="btn primary" id="btnDartReset">New leg</button>
+      </div>
+    </div>
+
+    <div id="dartWinner" class="champion" hidden></div>
+
+    <!-- 301 / 501 -->
+    <div id="countdownPanel">
+      <div class="dart-players" id="dartPlayers"></div>
+
+      <div class="glass throw-card">
+        <div class="card-head">
+          <h2>This turn</h2>
+          <button class="btn ghost sm" id="btnDartUndo">Undo turn</button>
+        </div>
+        <div class="dart-entry" id="dartEntry">0</div>
+        <div class="quick-scores" id="quickScores"></div>
+        <div class="keypad" id="dartKeypad">
+          <button class="key" data-key="1">1</button>
+          <button class="key" data-key="2">2</button>
+          <button class="key" data-key="3">3</button>
+          <button class="key" data-key="4">4</button>
+          <button class="key" data-key="5">5</button>
+          <button class="key" data-key="6">6</button>
+          <button class="key" data-key="7">7</button>
+          <button class="key" data-key="8">8</button>
+          <button class="key" data-key="9">9</button>
+          <button class="key wide" data-key="clear">Clear</button>
+          <button class="key" data-key="0">0</button>
+          <button class="key" data-key="back">&#9003;</button>
+          <button class="key enter" data-key="enter">Score turn</button>
+        </div>
+        <p class="hint">Type the total for the whole turn, then Score turn. Going below zero
+          (or landing on one with double out) is a bust and the score stays put.</p>
+      </div>
+    </div>
+
+    <!-- mickey mouse -->
+    <div id="mickeyPanel" class="glass table-card" hidden>
+      <div class="card-head">
+        <h2>Mickey Mouse</h2>
+        <span class="chip">three marks closes a target</span>
+      </div>
+      <div class="table-scroll">
+        <table class="standings mickey" id="mickeyTable"></table>
+      </div>
+      <p class="hint">Click a cell to add a mark, right-click to take one off. First to close
+        every target - and the bull - wins the leg.</p>
     </div>
   </section>
 
