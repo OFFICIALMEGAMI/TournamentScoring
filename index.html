@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tournament Brackets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;600;700&family=Baloo+2:wght@600;700;800&family=Bebas+Neue&family=Archivo:wght@500;600;700&family=Creepster&family=Mountains+of+Christmas:wght@700&family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+  <span class="blob b3"></span>
+  <span class="grid"></span>
+</div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <defs>
+          <linearGradient id="markGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#a78bfa"/><stop offset=".55" stop-color="#e879f9"/><stop offset="1" stop-color="#22d3ee"/>
+          </linearGradient>
+        </defs>
+        <path d="M7.5 3.5h9V9a4.5 4.5 0 0 1-9 0V3.5Z" stroke="url(#markGrad)" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M7.5 5H4.6v1.4A3.4 3.4 0 0 0 8 9.8M16.5 5h2.9v1.4A3.4 3.4 0 0 1 16 9.8" stroke="url(#markGrad)" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M12 13.6V17M8.6 20.4h6.8" stroke="url(#markGrad)" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <input id="tourneyTitle" class="title-input" value="Tournament" spellcheck="false" aria-label="Tournament name">
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <span class="tab-glider" id="tabGlider"></span>
+    <button class="tab is-active" data-view="teams" role="tab">
+      <span class="tab-ico">👥</span> Teams <span class="pill" id="teamCount">0</span>
+    </button>
+    <button class="tab" data-view="bracket" role="tab">
+      <span class="tab-ico">🗺️</span> Bracket
+    </button>
+    <button class="tab" data-view="points" role="tab">
+      <span class="tab-ico">💯</span> Points
+    </button>
+  </nav>
+
+  <div class="topbar-actions">
+    <button class="btn ghost sm" id="btnExport" title="Download as JSON">Export</button>
+    <button class="btn ghost sm" id="btnImport" title="Load a JSON export">Import</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </div>
+</header>
+
+<main>
+  <!-- ================= TEAMS ================= -->
+  <section id="view-teams" class="view is-active">
+
+    <div class="theme-bar glass">
+      <div class="theme-copy">
+        <b>Look &amp; feel</b>
+        <span id="themeBlurb">Switch the whole site between six skins.</span>
+      </div>
+      <div class="theme-switch" role="radiogroup" aria-label="Site theme">
+        <button class="theme-opt is-on" data-theme-pick="aurora" role="radio" aria-checked="true">
+          <span class="sw sw-aurora"></span> Aurora
+        </button>
+        <button class="theme-opt" data-theme-pick="kart" role="radio" aria-checked="false">
+          <span class="sw sw-kart"></span> Grand Prix <span class="kart-ico">🏎️</span>
+        </button>
+        <button class="theme-opt" data-theme-pick="music" role="radio" aria-checked="false">
+          <span class="sw sw-music"></span> Music
+        </button>
+        <button class="theme-opt" data-theme-pick="halloween" role="radio" aria-checked="false">
+          <span class="sw sw-halloween"></span> Halloween
+        </button>
+        <button class="theme-opt" data-theme-pick="christmas" role="radio" aria-checked="false">
+          <span class="sw sw-christmas"></span> Christmas
+        </button>
+        <button class="theme-opt" data-theme-pick="newyear" role="radio" aria-checked="false">
+          <span class="sw sw-newyear"></span> New Year
+        </button>
+      </div>
+    </div>
+
+    <div class="layout">
+
+      <div class="glass form-card" style="--i:0">
+        <div class="card-head">
+          <h2 id="formHeading">Add a team</h2>
+          <span class="chip" id="formChip">2 players</span>
+        </div>
+
+        <label class="field">
+          <span>Team name</span>
+          <input id="teamName" placeholder="e.g. The Underdogs" maxlength="40" autocomplete="off">
+        </label>
+
+        <div class="players">
+          <div class="player">
+            <div class="photo-drop" data-drop="1" tabindex="0" role="button" aria-label="Add photo for participant 1">
+              <img class="preview" alt="">
+              <span class="photo-hint"><b>＋</b>photo</span>
+              <button class="photo-clear" type="button" title="Remove photo" hidden>✕</button>
+              <span class="ring"></span>
+            </div>
+            <input class="p-name" data-name="1" placeholder="Participant 1" maxlength="30" autocomplete="off">
+            <input type="file" class="p-file" data-file="1" accept="image/*" hidden>
+          </div>
+          <div class="player">
+            <div class="photo-drop" data-drop="2" tabindex="0" role="button" aria-label="Add photo for participant 2">
+              <img class="preview" alt="">
+              <span class="photo-hint"><b>＋</b>photo</span>
+              <button class="photo-clear" type="button" title="Remove photo" hidden>✕</button>
+              <span class="ring"></span>
+            </div>
+            <input class="p-name" data-name="2" placeholder="Participant 2" maxlength="30" autocomplete="off">
+            <input type="file" class="p-file" data-file="2" accept="image/*" hidden>
+          </div>
+        </div>
+
+        <p class="hint">Click a circle to pick a photo — or drag an image straight onto it.</p>
+
+        <div class="form-actions">
+          <button class="btn primary" id="btnSaveTeam">Add team</button>
+          <button class="btn ghost" id="btnCancelEdit" hidden>Cancel</button>
+        </div>
+        <p class="error" id="formError" hidden></p>
+      </div>
+
+      <div class="glass list-card" style="--i:1">
+        <div class="card-head">
+          <h2>Line-up <span class="pill" id="teamCount2">0</span></h2>
+          <div class="head-actions">
+            <button class="btn ghost sm" id="btnShuffle">🎲 Shuffle</button>
+            <button class="btn ghost sm danger" id="btnClearTeams">Clear all</button>
+          </div>
+        </div>
+        <p class="hint">Drag a row to re-seed. Seed 1 meets the lowest seed first.</p>
+
+        <ul class="team-list" id="teamList"></ul>
+        <div class="empty" id="teamsEmpty">
+          <span class="empty-ico">🎽</span>
+          Nothing here yet — build your first team on the left.
+        </div>
+
+        <button class="btn primary wide" id="btnGoBracket">Build the bracket <span class="arrow">→</span></button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= BRACKET ================= -->
+  <section id="view-bracket" class="view">
+    <div class="bracket-bar glass">
+      <div class="bracket-info" id="bracketInfo"></div>
+      <div class="head-actions">
+        <button class="btn ghost sm" id="btnSimulate">⚡ Simulate</button>
+        <button class="btn ghost sm" id="btnResetPicks">Reset results</button>
+        <span class="zoom">
+          <button class="icon-btn" id="btnZoomOut" title="Zoom out (−)">−</button>
+          <span id="zoomLabel">100%</span>
+          <button class="icon-btn" id="btnZoomIn" title="Zoom in (+)">＋</button>
+        </span>
+      </div>
+    </div>
+
+    <div id="champion" class="champion" hidden></div>
+
+    <div class="bracket-scroll" id="bracketScroll">
+      <div class="bracket-zoom" id="bracketZoom">
+        <div class="bracket" id="bracket">
+          <svg class="connectors" id="connectors" aria-hidden="true"></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty" id="bracketEmpty">
+      <span class="empty-ico">🗺️</span>
+      Add at least two teams and the bracket draws itself.
+    </div>
+  </section>
+
+  <!-- ================= POINTS ================= -->
+  <section id="view-points" class="view">
+    <div class="points-bar glass">
+      <div class="bracket-info" id="pointsInfo"></div>
+      <div class="head-actions">
+        <span class="step-switch" role="radiogroup" aria-label="Step size">
+          <button class="step-opt is-on" data-step-pick="1" role="radio" aria-checked="true">±1</button>
+          <button class="step-opt" data-step-pick="5" role="radio" aria-checked="false">±5</button>
+          <button class="step-opt" data-step-pick="10" role="radio" aria-checked="false">±10</button>
+        </span>
+        <span class="step-switch" role="radiogroup" aria-label="Card order">
+          <button class="step-opt is-on" data-sort-pick="lineup" role="radio" aria-checked="true">Line-up</button>
+          <button class="step-opt" data-sort-pick="points" role="radio" aria-checked="false">Top first</button>
+        </span>
+        <button class="btn ghost sm danger" id="btnResetPoints">Reset points</button>
+      </div>
+    </div>
+
+    <div class="scoreboard" id="scoreboard"></div>
+
+    <div class="empty" id="pointsEmpty">
+      <span class="empty-ico">💯</span>
+      Add a team and it gets its own counter here.
+    </div>
+  </section>
+
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card glass" role="alertdialog" aria-modal="true" aria-labelledby="modalMsg">
+    <p class="modal-msg" id="modalMsg"></p>
+    <p class="modal-sub" id="modalSub"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modalCancel">Cancel</button>
+      <button class="btn solid-danger" id="modalOk">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
