@@ -75,7 +75,7 @@ Six skins, toggled on the Teams page and remembered with the rest of the state:
 The site is static with relative paths and no build step, so it drops straight onto
 GitHub Pages (or any static host). Push to a repo, then in **Settings -> Pages** set
 the source to `main` / root. A `.nojekyll` file is included so Pages serves the
-files as-is.
+files as-is, and `CNAME` points the site at tourney.dk.
 
 Nothing personal lives in the repo: teams, photos and scores are all held in your
 browser localStorage, never in these files. That also means the hosted copy starts
