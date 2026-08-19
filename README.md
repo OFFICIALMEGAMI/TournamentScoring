@@ -43,7 +43,7 @@ then open http://localhost:5599
 
 ## Themes
 
-Seven skins, toggled on the Teams page and remembered with the rest of the state:
+Nine skins, toggled on the Teams page and remembered with the rest of the state:
 
 - **Aurora** — the default: dark glass, violet/fuchsia/cyan gradients.
 - **Grand Prix** — a racing skin: clear sky with a checkered finish-line strip,
@@ -73,6 +73,13 @@ Seven skins, toggled on the Teams page and remembered with the rest of the state
 - **MTG** — a card-frame skin: dark table, parchment panels inside dark-wood
   borders, Cinzel serif type, crimson accents, and the five colours of mana as the
   life-counter seats. Rounds are duels and the champion is the Archmage.
+
+- **Darts** — a pub chalkboard: dark slate-green board, cream chalk type in Caveat,
+  chalk-line texture and a dartboard hanging behind the content in board red and
+  green. Rounds are legs, matches are boards, and the champion gets a Checkout.
+- **Beer pong** — a wooden table seen from above, with a rack of red cups at one end
+  and blue at the other. Cream cards with hard outlines, Bangers lettering, and
+  cup-red accents. Rounds end in the Last Cup and results are Sunk.
 
 ## Keyboard
 

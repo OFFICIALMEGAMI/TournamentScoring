@@ -28,7 +28,7 @@ let lastBoardSig = '';                // scoreboard team set — entrance anim o
 
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear', 'mtg'];
+const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear', 'mtg', 'darts', 'beerpong'];
 
 /* Each skin renames the furniture. Missing semi/quarter falls back to Round N. */
 const THEME_WORDS = {
@@ -45,12 +45,16 @@ const THEME_WORDS = {
   newyear:   { round: 'Round', semi: 'Semifinals', final: 'Countdown', match: 'Match',
                decided: 'Done', champ: 'Toast of the Night', leader: 'Frontrunner' },
   mtg:       { round: 'Round', semi: 'Semifinals', final: 'Final Duel', match: 'Duel',
-               decided: 'Resolved', champ: 'Archmage', leader: 'Ahead' }
+               decided: 'Resolved', champ: 'Archmage', leader: 'Ahead' },
+  darts:     { round: 'Leg', final: 'Final Leg', match: 'Board', decided: 'Checked out',
+               champ: 'Checkout', leader: 'On a finish' },
+  beerpong:  { round: 'Round', semi: 'Semifinals', final: 'Last Cup', match: 'Table',
+               decided: 'Sunk', champ: 'Last Cup Standing', leader: 'Hot hand' }
 };
 const words = () => THEME_WORDS[state.theme] || THEME_WORDS.aurora;
 
 /* What rides the connector line up to the next round. */
-const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨', mtg: '🃏' };
+const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨', mtg: '🃏', darts: '🎯', beerpong: '🏓' };
 
 const THEME_TOASTS = {
   aurora: '✨ Aurora restored',
@@ -59,7 +63,9 @@ const THEME_TOASTS = {
   halloween: '🎃 Halloween — something stirs',
   christmas: '🎄 Christmas — let it snow',
   newyear: '🎆 New Year — ten, nine, eight…',
-  mtg: '🃏 MTG — shuffle up and deal'
+  mtg: '🃏 MTG — shuffle up and deal',
+  darts: '🎯 Darts — game on',
+  beerpong: '🥤 Beer pong — rack them up'
 };
 
 /* ---------------- storage ---------------- */
@@ -1076,7 +1082,9 @@ const PALETTES = {
   halloween: ['#ff7518', '#8b5cf6', '#7cb518', '#f4f0ea', '#1a1020', '#ff9d4d'],
   christmas: ['#c1121f', '#2d6a4f', '#ffffff', '#f1e3c8', '#95d5b2', '#9b2226'],
   newyear: ['#e8eaf0', '#4dabff', '#ff5fa2', '#8b5cf6', '#ffffff', '#5eead4'],
-  mtg: ['#8c2f26', '#1f5fa8', '#1f6b3a', '#6b4b1f', '#f3e9cf', '#2a2438']
+  mtg: ['#8c2f26', '#1f5fa8', '#1f6b3a', '#6b4b1f', '#f3e9cf', '#2a2438'],
+  darts: ['#c8102e', '#1a7a44', '#f2ead6', '#3fbf6f', '#0d1712', '#8c1024'],
+  beerpong: ['#d0342c', '#1f6fb2', '#f2b23e', '#fffaf2', '#2f9e57', '#7b4a24']
 };
 const confettiColors = () => PALETTES[state.theme] || PALETTES.aurora;
 let particles = [];
