@@ -11,7 +11,7 @@ let state = {
   teams: [],
   picks: {},                       // bracket: match key -> winning team id
   scores: {},                      // points counter: team id -> running total
-  pods: { size: 4, winPoints: 3, rounds: [] },   // commander pods
+  life: { count: 4, start: 40, useEntrants: false, players: [] },   // commander life
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
@@ -28,7 +28,7 @@ let lastBoardSig = '';                // scoreboard team set — entrance anim o
 
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear'];
+const THEMES = ['aurora', 'kart', 'music', 'halloween', 'christmas', 'newyear', 'mtg'];
 
 /* Each skin renames the furniture. Missing semi/quarter falls back to Round N. */
 const THEME_WORDS = {
@@ -43,12 +43,14 @@ const THEME_WORDS = {
   christmas: { round: 'Round', semi: 'Semifinals', final: 'Grand Finale', match: 'Match',
                decided: 'Wrapped', champ: 'Top of the Tree', leader: 'Nice list' },
   newyear:   { round: 'Round', semi: 'Semifinals', final: 'Countdown', match: 'Match',
-               decided: 'Done', champ: 'Toast of the Night', leader: 'Frontrunner' }
+               decided: 'Done', champ: 'Toast of the Night', leader: 'Frontrunner' },
+  mtg:       { round: 'Round', semi: 'Semifinals', final: 'Final Duel', match: 'Duel',
+               decided: 'Resolved', champ: 'Archmage', leader: 'Ahead' }
 };
 const words = () => THEME_WORDS[state.theme] || THEME_WORDS.aurora;
 
 /* What rides the connector line up to the next round. */
-const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨' };
+const TRAVEL_GLYPHS = { kart: '🏎️', music: '🎵', halloween: '🦇', christmas: '🎁', newyear: '✨', mtg: '🃏' };
 
 const THEME_TOASTS = {
   aurora: '✨ Aurora restored',
@@ -56,7 +58,8 @@ const THEME_TOASTS = {
   music: '🎵 Music — cue the next track',
   halloween: '🎃 Halloween — something stirs',
   christmas: '🎄 Christmas — let it snow',
-  newyear: '🎆 New Year — ten, nine, eight…'
+  newyear: '🎆 New Year — ten, nine, eight…',
+  mtg: '🃏 MTG — shuffle up and deal'
 };
 
 /* ---------------- storage ---------------- */
@@ -72,7 +75,7 @@ function load() {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
-        pods: normalizePods(parsed.pods),
+        life: normalizeLife(parsed.life),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -575,297 +578,255 @@ function wirePoints() {
   });
 }
 
-/* ---------------- commander pods ---------------- */
+/* ---------------- commander life counter ---------------- */
 
-const POD_SIZES = [3, 4, 5];
-const MIN_POD = 3;
+const LIFE_COUNTS = [2, 3, 4, 5, 6];
+const LIFE_STARTS = [20, 30, 40];
+const LETHAL_CMD = 21;                       // commander damage that kills outright
 
-function normalizePods(raw) {
-  const out = { size: 4, winPoints: 3, rounds: [] };
-  if (!raw || typeof raw !== 'object') return out;
-  if (POD_SIZES.includes(Number(raw.size))) out.size = Number(raw.size);
-  const wp = Math.round(Number(raw.winPoints));
-  if (Number.isFinite(wp) && wp >= 0 && wp <= 20) out.winPoints = wp;
-  if (Array.isArray(raw.rounds)) {
-    out.rounds = raw.rounds
-      .filter(r => r && Array.isArray(r.pods))
-      .map(r => ({
-        pods: r.pods.filter(p => p && Array.isArray(p.players)).map(p => ({
-          players: p.players.filter(id => typeof id === 'string'),
-          winner: typeof p.winner === 'string' ? p.winner : null
-        }))
+/* Which way each seat faces, so players read their own total from their chair. */
+const SEAT_ROTATIONS = {
+  2: [180, 0],
+  3: [90, 270, 0],
+  4: [90, 270, 90, 270],
+  5: [90, 270, 90, 270, 0],
+  6: [90, 270, 90, 270, 90, 270]
+};
+
+function normalizeLife(raw) {
+  const out = { count: 4, start: 40, useEntrants: false, players: [] };
+  if (raw && typeof raw === 'object') {
+    if (LIFE_COUNTS.includes(Number(raw.count))) out.count = Number(raw.count);
+    const s = Math.round(Number(raw.start));
+    if (Number.isFinite(s) && s > 0 && s <= 999) out.start = s;
+    out.useEntrants = !!raw.useEntrants;
+    if (Array.isArray(raw.players)) {
+      out.players = raw.players.slice(0, 6).map(p => ({
+        life: Number.isFinite(Number(p && p.life)) ? Math.round(Number(p.life)) : out.start,
+        cmd: Array.isArray(p && p.cmd) ? p.cmd.slice(0, 6).map(n => Math.max(0, Math.round(Number(n) || 0))) : []
       }));
+    }
   }
+  syncLifeSeats(out);
   return out;
 }
 
-const pairId = (a, b) => [a, b].sort().join('|');
-
-/** How often each pair has already shared a pod, so seating can spread people out. */
-function meetingCounts() {
-  const met = new Map();
-  for (const round of state.pods.rounds) {
-    for (const pod of round.pods) {
-      for (let i = 0; i < pod.players.length; i++) {
-        for (let j = i + 1; j < pod.players.length; j++) {
-          const k = pairId(pod.players[i], pod.players[j]);
-          met.set(k, (met.get(k) || 0) + 1);
-        }
-      }
-    }
+/** Keeps the seat array the same length as the chosen player count. */
+function syncLifeSeats(life) {
+  while (life.players.length < life.count) {
+    life.players.push({ life: life.start, cmd: [] });
   }
-  return met;
-}
-
-function shuffled(list) {
-  const out = list.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+  life.players.length = life.count;
+  for (const p of life.players) {
+    while (p.cmd.length < life.count) p.cmd.push(0);
+    p.cmd.length = life.count;
   }
-  return out;
 }
 
-/**
- * Splits the field into pods as close to the chosen size as possible - Commander
- * plays badly with a pod of two, so the remainder is spread across pods instead
- * of left in a stub. Seating then prefers players who have not met yet.
- */
-function seatRound() {
-  const ids = state.teams.map(t => t.id);
-  if (ids.length < MIN_POD) return null;
-
-  const podCount = Math.max(1, Math.round(ids.length / state.pods.size));
-  const base = Math.floor(ids.length / podCount);
-  let extra = ids.length - base * podCount;
-  const capacities = Array.from({ length: podCount }, () => base + (extra-- > 0 ? 1 : 0));
-
-  const met = meetingCounts();
-  const pool = shuffled(ids);
-  const standing = new Map(podStandings().map((r, i) => [r.id, i]));
-
-  return {
-    pods: capacities.map(cap => {
-      const seats = [];
-      while (seats.length < cap && pool.length) {
-        let pick = 0;
-        let best = Infinity;
-        pool.forEach((id, i) => {
-          // fewest previous meetings with this pod, then closest in the standings
-          const repeats = seats.reduce((n, other) => n + (met.get(pairId(id, other)) || 0), 0);
-          const score = repeats * 100 + (standing.get(id) || 0);
-          if (score < best) { best = score; pick = i; }
-        });
-        seats.push(pool.splice(pick, 1)[0]);
-      }
-      return { players: seats, winner: null };
-    })
-  };
-}
-
-function podStandings() {
-  const rows = new Map(state.teams.map(t => [t.id, {
-    id: t.id, team: t, games: 0, wins: 0, pts: 0
-  }]));
-  const win = Number(state.pods.winPoints) || 0;
-
-  for (const round of state.pods.rounds) {
-    for (const pod of round.pods) {
-      for (const id of pod.players) {
-        const row = rows.get(id);
-        if (row) row.games++;
-      }
-      const winner = pod.winner && rows.get(pod.winner);
-      if (winner) { winner.wins++; winner.pts += win; }
-    }
+function resetLife() {
+  state.life.players = [];
+  syncLifeSeats(state.life);
+  for (const p of state.life.players) {
+    p.life = state.life.start;
+    p.cmd = new Array(state.life.count).fill(0);
   }
-  return Array.from(rows.values()).sort((a, b) =>
-    b.pts - a.pts || b.wins - a.wins || a.games - b.games || a.team.name.localeCompare(b.team.name));
 }
 
-/* ---------------- render: pods ---------------- */
+/** Seat labels come from the entrant list when asked for, otherwise Player N. */
+function seatName(i) {
+  if (state.life.useEntrants && state.teams[i]) return state.teams[i].name;
+  return `Player ${i + 1}`;
+}
 
-function renderPods() {
-  const enough = state.teams.length >= MIN_POD;
-  $('#podsEmpty').hidden = enough;
-  $('.pods-bar').hidden = !enough;
-  $('.pods-grid').hidden = !enough;
-  $$('.step-opt[data-pod-pick]').forEach(b => {
-    const on = Number(b.dataset.podPick) === state.pods.size;
+function seatTeam(i) {
+  return state.life.useEntrants ? state.teams[i] || null : null;
+}
+
+/* ---------------- render: life ---------------- */
+
+function renderLife() {
+  syncLifeSeats(state.life);
+
+  $$('.step-opt[data-seats-pick]').forEach(b => {
+    const on = Number(b.dataset.seatsPick) === state.life.count;
     b.classList.toggle('is-on', on);
     b.setAttribute('aria-checked', on ? 'true' : 'false');
   });
-  if (!enough) return;
+  $$('.step-opt[data-start-pick]').forEach(b => {
+    const on = Number(b.dataset.startPick) === state.life.start;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('#useEntrants').checked = state.life.useEntrants;
+  $('#useEntrants').disabled = state.teams.length < 2;
 
-  $('#podWin').value = state.pods.winPoints;
-  renderPodRounds();
-  renderPodStandings();
-  updatePodsInfo();
+  const grid = $('#lifeGrid');
+  const rotations = SEAT_ROTATIONS[state.life.count] || SEAT_ROTATIONS[4];
+  grid.dataset.count = state.life.count;
+  grid.innerHTML = state.life.players.map((seat, i) => seatHTML(seat, i, rotations[i] || 0)).join('');
+  updateLifeInfo();
 }
 
-function updatePodsInfo() {
-  const rounds = state.pods.rounds.length;
-  const games = state.pods.rounds.reduce((n, r) => n + r.pods.length, 0);
-  const done = state.pods.rounds.reduce((n, r) => n + r.pods.filter(p => p.winner).length, 0);
-  $('#podsInfo').innerHTML = rounds
-    ? `<b>${rounds}</b> round${rounds > 1 ? 's' : ''} · <b>${done}/${games}</b> pods decided · ${state.teams.length} entrants`
-    : `<b>${state.teams.length}</b> entrants · seat the first round to begin`;
-}
+function seatHTML(seat, i, rot) {
+  const team = seatTeam(i);
+  const dead = seat.life <= 0;
+  const cmdOut = seat.cmd.some((n, from) => from !== i && n >= LETHAL_CMD);
 
-function renderPodRounds() {
-  const wrap = $('#podRounds');
-  const w = words();
-  if (!state.pods.rounds.length) {
-    wrap.innerHTML = `<div class="empty"><span class="empty-ico">🃏</span>
-      No pods yet - hit <b>Seat round</b> to deal everyone into pods of ${state.pods.size}.</div>`;
-    return;
-  }
-  wrap.innerHTML = state.pods.rounds.map((round, r) => `
-    <section class="pod-round">
-      <p class="fx-round-label">${r === state.pods.rounds.length - 1 && round.final ? 'Final pod' : `${w.round} ${r + 1}`}</p>
-      <div class="pod-list">
-        ${round.pods.map((pod, i) => podHTML(pod, r, i)).join('')}
-      </div>
-    </section>`).reverse().join('');
-}
-
-function podHTML(pod, r, i) {
-  const seats = pod.players.map(id => teamById(id)).filter(Boolean);
-  const decided = !!pod.winner;
   return `
-    <div class="pod ${decided ? 'decided' : ''}" data-round="${r}" data-pod="${i}">
-      <div class="pod-head">
-        <span>Pod ${i + 1}</span>
-        <span class="st">${decided ? 'Winner picked' : `${seats.length} players`}</span>
+    <div class="life-panel rot-${rot} ${dead || cmdOut ? 'down' : ''}" data-seat="${i}">
+      <div class="life-inner">
+        <button class="life-step minus" data-delta="-1" aria-label="${esc(seatName(i))} minus one">&minus;</button>
+
+        <div class="life-mid">
+          <div class="life-name">
+            ${team ? avatarsHTML(team, 'av') : ''}
+            <span>${esc(seatName(i))}</span>
+          </div>
+          <div class="life-total">${seat.life}</div>
+          ${dead ? '<div class="life-out">Out</div>' : cmdOut ? '<div class="life-out">Cmd</div>' : ''}
+          <div class="cmd-strip">
+            ${seat.cmd.map((n, from) => from === i ? '' : `
+              <button class="cmd-chip ${n >= LETHAL_CMD ? 'lethal' : n ? 'hit' : ''}"
+                      data-from="${from}"
+                      title="Commander damage from ${esc(seatName(from))} - click +1, right-click -1">${n}</button>`).join('')}
+          </div>
+        </div>
+
+        <button class="life-step plus" data-delta="1" aria-label="${esc(seatName(i))} plus one">+</button>
       </div>
-      ${seats.map(team => {
-        const isWinner = pod.winner === team.id;
-        return `
-        <button class="seat ${isWinner ? 'winner' : ''} ${decided && !isWinner ? 'out' : ''}" data-team="${team.id}">
-          ${avatarsHTML(team, 'av')}
-          <span class="info">
-            <span class="name">${esc(team.name)}</span>
-            <span class="sub">${esc(playerLine(team))}</span>
-          </span>
-          <span class="mark">${isWinner ? '👑' : ''}</span>
-        </button>`;
-      }).join('')}
     </div>`;
 }
 
-function renderPodStandings() {
-  const body = $('#podStandingsBody');
-  const before = new Map();
-  body.querySelectorAll('tr').forEach(tr => before.set(tr.dataset.id, tr.getBoundingClientRect()));
+function updateLifeInfo() {
+  const alive = state.life.players.filter(p => p.life > 0 && !p.cmd.some(n => n >= LETHAL_CMD)).length;
+  const lowest = Math.min(...state.life.players.map(p => p.life));
+  $('#lifeInfo').innerHTML =
+    `<b>${state.life.count}</b> players from <b>${state.life.start}</b> life · ` +
+    (alive <= 1 ? '<b>game over</b>' : `${alive} still in · lowest ${lowest}`);
+}
 
-  const list = podStandings();
-  body.innerHTML = list.map((r, i) => `
-    <tr data-id="${r.id}" class="${i === 0 && r.pts > 0 ? 'top' : ''}">
-      <td class="c"><span class="pos">${i + 1}</span></td>
-      <td class="team">
-        <div class="st-team">
-          ${avatarsHTML(r.team, 'avatars')}
-          <span class="nm"><b>${esc(r.team.name)}</b><span>${esc(playerLine(r.team))}</span></span>
-        </div>
-      </td>
-      <td class="c">${r.games}</td>
-      <td class="c">${r.wins}</td>
-      <td class="c pts">${r.pts}</td>
-    </tr>`).join('');
+/** Repaints one seat in place - the grid is never rebuilt mid-game. */
+function paintSeat(i) {
+  const panel = $(`#lifeGrid .life-panel[data-seat="${i}"]`);
+  const seat = state.life.players[i];
+  if (!panel || !seat) return;
 
-  if (!calm && before.size) {
-    body.querySelectorAll('tr').forEach(tr => {
-      const was = before.get(tr.dataset.id);
-      if (!was) return;
-      const delta = was.top - tr.getBoundingClientRect().top;
-      if (!delta) return;
-      tr.animate([{ transform: `translateY(${delta}px)` }, { transform: 'none' }],
-        { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
-    });
+  const dead = seat.life <= 0;
+  const cmdOut = seat.cmd.some((n, from) => from !== i && n >= LETHAL_CMD);
+  panel.classList.toggle('down', dead || cmdOut);
+  panel.querySelector('.life-total').textContent = seat.life;
+
+  const out = panel.querySelector('.life-out');
+  const label = dead ? 'Out' : cmdOut ? 'Cmd' : '';
+  if (label && !out) {
+    const el = document.createElement('div');
+    el.className = 'life-out';
+    el.textContent = label;
+    panel.querySelector('.life-total').after(el);
+  } else if (label && out) {
+    out.textContent = label;
+  } else if (!label && out) {
+    out.remove();
+  }
+
+  panel.querySelectorAll('.cmd-chip').forEach(chip => {
+    const n = seat.cmd[Number(chip.dataset.from)] || 0;
+    chip.textContent = n;
+    chip.classList.toggle('hit', n > 0 && n < LETHAL_CMD);
+    chip.classList.toggle('lethal', n >= LETHAL_CMD);
+  });
+  updateLifeInfo();
+}
+
+function nudgeLife(i, delta, origin) {
+  const seat = state.life.players[i];
+  if (!seat) return;
+  seat.life += delta;
+  save();
+  paintSeat(i);
+
+  const total = $(`#lifeGrid .life-panel[data-seat="${i}"] .life-total`);
+  if (total && !calm) {
+    total.classList.remove('up', 'down-tick');
+    void total.offsetWidth;
+    total.classList.add(delta > 0 ? 'up' : 'down-tick');
+  }
+  if (delta > 0 && origin && !calm) {
+    spray({ x: origin.x, y: origin.y, count: 7, power: 5, size: .5, decay: .06 });
   }
 }
 
-/** Repaints one pod in place, so picking a winner never rebuilds the page. */
-function paintPod(el) {
-  const round = state.pods.rounds[Number(el.dataset.round)];
-  const pod = round && round.pods[Number(el.dataset.pod)];
-  if (!pod) return;
-  const decided = !!pod.winner;
-  el.classList.toggle('decided', decided);
-  el.querySelector('.pod-head .st').textContent =
-    decided ? 'Winner picked' : `${pod.players.length} players`;
-  el.querySelectorAll('.seat').forEach(seat => {
-    const isWinner = pod.winner === seat.dataset.team;
-    seat.classList.toggle('winner', isWinner);
-    seat.classList.toggle('out', decided && !isWinner);
-    seat.querySelector('.mark').textContent = isWinner ? '👑' : '';
-  });
-}
+function wireLife() {
+  const grid = $('#lifeGrid');
 
-function wirePods() {
-  $('#podRounds').addEventListener('click', e => {
-    const seat = e.target.closest('.seat');
-    if (!seat) return;
-    const el = seat.closest('.pod');
-    const round = state.pods.rounds[Number(el.dataset.round)];
-    const pod = round && round.pods[Number(el.dataset.pod)];
-    if (!pod) return;
-
-    const id = seat.dataset.team;
-    pod.winner = pod.winner === id ? null : id;
-    save();
-    paintPod(el);
-    renderPodStandings();
-    updatePodsInfo();
-
-    if (pod.winner === id && !calm) {
-      const r = seat.getBoundingClientRect();
-      spray({ x: r.left + r.width / 2, y: r.top + r.height / 2, count: 16, power: 6.5, size: .7, decay: .03 });
+  grid.addEventListener('click', e => {
+    const step = e.target.closest('.life-step');
+    if (step) {
+      const i = Number(step.closest('.life-panel').dataset.seat);
+      nudgeLife(i, Number(step.dataset.delta), { x: e.clientX, y: e.clientY });
+      return;
+    }
+    const chip = e.target.closest('.cmd-chip');
+    if (chip) {
+      const i = Number(chip.closest('.life-panel').dataset.seat);
+      const from = Number(chip.dataset.from);
+      const seat = state.life.players[i];
+      seat.cmd[from] = Math.max(0, (seat.cmd[from] || 0) + 1);
+      seat.life -= 1;                       // commander damage takes life too
+      save();
+      paintSeat(i);
     }
   });
 
-  $('#btnSeatRound').addEventListener('click', () => {
-    const round = seatRound();
-    if (!round) return;
-    state.pods.rounds.push(round);
+  // right-click a chip to take commander damage back off
+  grid.addEventListener('contextmenu', e => {
+    const chip = e.target.closest('.cmd-chip');
+    if (!chip) return;
+    e.preventDefault();
+    const i = Number(chip.closest('.life-panel').dataset.seat);
+    const from = Number(chip.dataset.from);
+    const seat = state.life.players[i];
+    if (!seat.cmd[from]) return;
+    seat.cmd[from] -= 1;
+    seat.life += 1;
     save();
-    renderPods();
-    toast(`Round ${state.pods.rounds.length} seated`);
+    paintSeat(i);
   });
 
-  $('#btnTopPod').addEventListener('click', () => {
-    const top = podStandings().slice(0, state.pods.size).map(r => r.id);
-    if (top.length < MIN_POD) return;
-    state.pods.rounds.push({ pods: [{ players: top, winner: null }], final: true });
+  $$('.step-opt[data-seats-pick]').forEach(b => b.addEventListener('click', () => {
+    state.life.count = Number(b.dataset.seatsPick);
+    syncLifeSeats(state.life);
     save();
-    renderPods();
-    toast('Final pod seated with the leaders');
-  });
-
-  $('#podWin').addEventListener('input', () => {
-    const n = Math.round(Number($('#podWin').value));
-    state.pods.winPoints = Number.isFinite(n) && n >= 0 && n <= 20 ? n : 0;
-    save();
-    renderPodStandings();
-  });
-
-  $$('.step-opt[data-pod-pick]').forEach(b => b.addEventListener('click', () => {
-    state.pods.size = Number(b.dataset.podPick);
-    save();
-    renderPods();
+    renderLife();
   }));
 
-  $('#btnResetPods').addEventListener('click', async () => {
-    if (!state.pods.rounds.length) return;
-    const ok = await askConfirm('Clear every pod round?', {
-      sub: 'Seating and winners go. Entrants, bracket and points are untouched.',
-      okLabel: 'Clear'
-    });
-    if (!ok) return;
-    state.pods.rounds = [];
+  $$('.step-opt[data-start-pick]').forEach(b => b.addEventListener('click', () => {
+    state.life.start = Number(b.dataset.startPick);
+    resetLife();
     save();
-    renderPods();
-    toast('Pods cleared');
+    renderLife();
+    toast(`Everyone back to ${state.life.start}`);
+  }));
+
+  $('#useEntrants').addEventListener('change', () => {
+    state.life.useEntrants = $('#useEntrants').checked;
+    save();
+    renderLife();
+  });
+
+  $('#btnResetLife').addEventListener('click', async () => {
+    const touched = state.life.players.some(p => p.life !== state.life.start || p.cmd.some(Boolean));
+    if (touched) {
+      const ok = await askConfirm('Start a new game?', {
+        sub: `Everyone goes back to ${state.life.start} life and commander damage clears.`,
+        okLabel: 'New game'
+      });
+      if (!ok) return;
+    }
+    resetLife();
+    save();
+    renderLife();
+    toast('New game');
   });
 }
 
@@ -1114,7 +1075,8 @@ const PALETTES = {
   music: ['#e2482a', '#0e7c73', '#1d1a15', '#fffdf9', '#d97706', '#8c1c13'],
   halloween: ['#ff7518', '#8b5cf6', '#7cb518', '#f4f0ea', '#1a1020', '#ff9d4d'],
   christmas: ['#c1121f', '#2d6a4f', '#ffffff', '#f1e3c8', '#95d5b2', '#9b2226'],
-  newyear: ['#e8eaf0', '#4dabff', '#ff5fa2', '#8b5cf6', '#ffffff', '#5eead4']
+  newyear: ['#e8eaf0', '#4dabff', '#ff5fa2', '#8b5cf6', '#ffffff', '#5eead4'],
+  mtg: ['#8c2f26', '#1f5fa8', '#1f6b3a', '#6b4b1f', '#f3e9cf', '#2a2438']
 };
 const confettiColors = () => PALETTES[state.theme] || PALETTES.aurora;
 let particles = [];
@@ -1434,7 +1396,7 @@ function renderAll() {
   renderTeams();
   renderBracket();
   renderPoints();
-  renderPods();
+  renderLife();
 }
 
 /* ---------------- simulate ---------------- */
@@ -1484,7 +1446,7 @@ function importJSON(file) {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
-        pods: normalizePods(parsed.pods),
+        life: normalizeLife(parsed.life),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -1698,7 +1660,7 @@ function wire() {
   wireDrag();
   wireTrace();
   wirePoints();
-  wirePods();
+  wireLife();
 }
 
 /* ---------------- boot ---------------- */

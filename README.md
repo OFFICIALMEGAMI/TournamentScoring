@@ -26,12 +26,12 @@ then open http://localhost:5599
   score and glides cards into place. The clear leader gets a badge, and totals can
   go negative for penalties. Clicking `+` updates that one card in place — the board
   is never rebuilt, so nothing scrolls or re-animates under your cursor.
-- **Pods** - Magic: the Gathering Commander style. Seat everyone into multiplayer
-  pods of 3, 4 or 5, click the last player standing to award the pod, and repeat.
-  Seating spreads people out by preferring opponents they have not met, remainders
-  are shared across pods rather than left as a stub, and standings rank on points
-  then wins then fewest games. **Final pod** seats the current leaders for the
-  decider.
+- **MTG** - a Commander life counter. Two to six seats, each panel rotated to face
+  its own chair, starting life 20/30/40, and big tap targets at both ends of every
+  panel for gaining and losing life. The chips are commander damage from each
+  opponent: click to add one (it takes a life with it), right-click to take it back,
+  and 21 from a single player knocks you out. Optionally seat your entrants so the
+  panels carry their names and photos. Seat colours follow the active theme.
 - **Simulate** — fills the remaining matches with random winners, one at a time.
 - **Winning a match** — the slot sweeps green, the photos hop, a small burst
   fires from the click, and a glowing token travels the connector line into the
@@ -43,7 +43,7 @@ then open http://localhost:5599
 
 ## Themes
 
-Six skins, toggled on the Teams page and remembered with the rest of the state:
+Seven skins, toggled on the Teams page and remembered with the rest of the state:
 
 - **Aurora** — the default: dark glass, violet/fuchsia/cyan gradients.
 - **Grand Prix** — a racing skin: clear sky with a checkered finish-line strip,
@@ -69,6 +69,10 @@ Six skins, toggled on the Teams page and remembered with the rest of the state:
   loop, silver-and-blue deco palette with Cinzel type. Scores are struck on a
   **silver medallion** with a sweeping sheen. The final is the Countdown and the
   winner is the Toast of the Night.
+
+- **MTG** — a card-frame skin: dark table, parchment panels inside dark-wood
+  borders, Cinzel serif type, crimson accents, and the five colours of mana as the
+  life-counter seats. Rounds are duels and the champion is the Archmage.
 
 ## Keyboard
 

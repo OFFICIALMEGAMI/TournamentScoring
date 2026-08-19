@@ -44,8 +44,8 @@
     <button class="tab" data-view="bracket" role="tab">
       <span class="tab-ico">🗺️</span> Bracket
     </button>
-    <button class="tab" data-view="pods" role="tab">
-      <span class="tab-ico">🃏</span> Pods
+    <button class="tab" data-view="life" role="tab">
+      <span class="tab-ico">🃏</span> MTG
     </button>
     <button class="tab" data-view="points" role="tab">
       <span class="tab-ico">💯</span> Points
@@ -86,6 +86,9 @@
         </button>
         <button class="theme-opt" data-theme-pick="newyear" role="radio" aria-checked="false">
           <span class="sw sw-newyear"></span> New Year
+        </button>
+        <button class="theme-opt" data-theme-pick="mtg" role="radio" aria-checked="false">
+          <span class="sw sw-mtg"></span> MTG
         </button>
       </div>
     </div>
@@ -191,52 +194,37 @@
     </div>
   </section>
 
-  <!-- ================= PODS (commander) ================= -->
-  <section id="view-pods" class="view">
-    <div class="pods-bar glass">
-      <div class="bracket-info" id="podsInfo"></div>
+  <!-- ================= LIFE (commander) ================= -->
+  <section id="view-life" class="view">
+    <div class="life-bar glass">
+      <div class="bracket-info" id="lifeInfo"></div>
       <div class="head-actions">
-        <span class="step-switch" role="radiogroup" aria-label="Pod size">
-          <button class="step-opt" data-pod-pick="3" role="radio" aria-checked="false">3</button>
-          <button class="step-opt is-on" data-pod-pick="4" role="radio" aria-checked="true">4</button>
-          <button class="step-opt" data-pod-pick="5" role="radio" aria-checked="false">5</button>
+        <span class="step-switch" role="radiogroup" aria-label="Players">
+          <button class="step-opt" data-seats-pick="2" role="radio" aria-checked="false">2</button>
+          <button class="step-opt" data-seats-pick="3" role="radio" aria-checked="false">3</button>
+          <button class="step-opt is-on" data-seats-pick="4" role="radio" aria-checked="true">4</button>
+          <button class="step-opt" data-seats-pick="5" role="radio" aria-checked="false">5</button>
+          <button class="step-opt" data-seats-pick="6" role="radio" aria-checked="false">6</button>
         </span>
-        <span class="pts-rules">
-          <label>Win <input id="podWin" type="number" min="0" max="20" step="1"></label>
+        <span class="step-switch" role="radiogroup" aria-label="Starting life">
+          <button class="step-opt" data-start-pick="20" role="radio" aria-checked="false">20</button>
+          <button class="step-opt" data-start-pick="30" role="radio" aria-checked="false">30</button>
+          <button class="step-opt is-on" data-start-pick="40" role="radio" aria-checked="true">40</button>
         </span>
-        <button class="btn primary" id="btnSeatRound">Seat round</button>
-        <button class="btn ghost sm" id="btnTopPod">Final pod</button>
-        <button class="btn ghost sm danger" id="btnResetPods">Clear pods</button>
+        <label class="use-entrants">
+          <input type="checkbox" id="useEntrants"> Use entrants
+        </label>
+        <button class="btn primary" id="btnResetLife">New game</button>
       </div>
     </div>
 
-    <div class="pods-grid">
-      <div id="podRounds"></div>
+    <div class="life-grid" id="lifeGrid" data-count="4"></div>
 
-      <div class="glass table-card" style="--i:1">
-        <div class="card-head"><h2>Standings</h2></div>
-        <div class="table-scroll">
-          <table class="standings">
-            <thead>
-              <tr>
-                <th class="c">#</th>
-                <th>Entrant</th>
-                <th class="c" title="Games played">G</th>
-                <th class="c" title="Pod wins">W</th>
-                <th class="c" title="Points">Pts</th>
-              </tr>
-            </thead>
-            <tbody id="podStandingsBody"></tbody>
-          </table>
-        </div>
-        <p class="hint">A pod win is worth the points set above. Ties break on wins, then fewest games.</p>
-      </div>
-    </div>
-
-    <div class="empty" id="podsEmpty">
-      <span class="empty-ico">🃏</span>
-      Commander needs a table - add at least three entrants.
-    </div>
+    <p class="hint" style="text-align:center;margin-top:12px">
+      Tap the ends of a panel to gain or lose life. The small chips are commander damage
+      from each opponent - click to add one (it takes a life too), right-click to take it back.
+      21 commander damage from one player knocks you out.
+    </p>
   </section>
 
   <!-- ================= POINTS ================= -->

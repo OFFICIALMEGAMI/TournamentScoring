@@ -576,59 +576,128 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
 [data-theme="kart"] .step:active{transform:translateY(2px);box-shadow:none}
 [data-theme="kart"] .sc-crown{border:2px solid var(--stroke);background:linear-gradient(180deg,#ffd93d,#ffb347);color:#3d2600}
 
-/* ---------- commander pods ---------- */
-.pods-bar{
+/* ---------- commander life counter ---------- */
+.life-bar{
   display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-  padding:12px 16px;margin-bottom:18px;
+  padding:12px 16px;margin-bottom:14px;
 }
-.pods-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:20px;align-items:start}
-@media (max-width:1050px){.pods-grid{grid-template-columns:1fr}}
-.pod-round{margin-bottom:22px}
-.pod-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.pod{
-  border-radius:var(--r-md);overflow:hidden;
-  background:linear-gradient(150deg,var(--glass),rgba(255,255,255,.02));
-  border:1px solid var(--stroke);
-  box-shadow:0 18px 40px -28px rgba(0,0,0,.9);
-  transition:transform .3s var(--spring),box-shadow .3s var(--ease),border-color .25s var(--ease);
+.life-bar .pts-rules label{cursor:pointer}
+.use-entrants{
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;
+  letter-spacing:.6px;text-transform:uppercase;color:var(--ink-faint);
+  padding:6px 12px;border-radius:var(--r-sm);
+  background:rgba(255,255,255,.04);border:1px solid var(--stroke);cursor:pointer;
 }
-.pod:hover{transform:translateY(-3px);box-shadow:0 24px 48px -26px rgba(139,92,246,.75)}
-.pod.decided{border-color:rgba(52,211,153,.3)}
-.pod-head{
-  display:flex;justify-content:space-between;gap:8px;padding:7px 12px;
-  font-size:9.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
-  color:var(--ink-faint);background:rgba(0,0,0,.28);border-bottom:1px solid var(--stroke);
+.use-entrants input{width:15px;height:15px;accent-color:var(--v1);cursor:pointer}
+.use-entrants:has(input:disabled){opacity:.45;cursor:not-allowed}
+
+.life-grid{
+  display:grid;gap:10px;
+  height:min(74vh,860px);
 }
-.seat{
-  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:11px;
-  width:100%;padding:9px 12px;text-align:left;color:inherit;cursor:pointer;
-  background:transparent;border:0;border-left:3px solid transparent;
-  transition:background .25s var(--ease),opacity .25s var(--ease),border-color .25s var(--ease);
+.life-grid[data-count="2"]{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.life-grid[data-count="3"]{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.life-grid[data-count="3"] .life-panel:nth-child(3){grid-column:span 2}
+.life-grid[data-count="4"]{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.life-grid[data-count="5"],.life-grid[data-count="6"]{grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr)}
+.life-grid[data-count="5"] .life-panel:nth-child(5){grid-column:span 2}
+@media (max-width:700px){
+  /* a definite height, not min-height: container query units resolve to 0 when the
+     container block size is indefinite, which collapses the rotated faces */
+  .life-grid{height:auto;grid-template-columns:1fr!important;grid-template-rows:none!important}
+  .life-grid .life-panel{height:190px;grid-column:auto!important}
 }
-.seat+.seat{border-top:1px solid var(--stroke)}
-.seat:hover{background:rgba(255,255,255,.08)}
-.seat .av{display:flex}
-.seat .av img,.seat .av .ph{
-  width:30px;height:30px;border-radius:50%;object-fit:cover;
-  border:2px solid rgba(12,12,24,.9);background:rgba(255,255,255,.08);
-  display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-dim);
+
+/* if container query units are unavailable, drop the rotation rather than collapse */
+@supports not (width:100cqh){
+  .life-panel.rot-90 .life-inner,.life-panel.rot-270 .life-inner{
+    width:100%;height:100%;transform:translate(-50%,-50%);
+  }
 }
-.seat .av>*+*{margin-left:-9px}
-.seat .info{min-width:0;display:block}
-.seat .name{display:block;font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seat .sub{display:block;font-size:11px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seat .mark{font-size:15px}
-.seat.winner{
-  border-left-color:var(--win);
-  background:linear-gradient(90deg,rgba(52,211,153,.2),rgba(52,211,153,.03));
+
+.life-panel{
+  container-type:size;                 /* lets the rotated face swap w/h in cq units */
+  position:relative;overflow:hidden;
+  border-radius:var(--r-md);
+  background:var(--seat-bg);
+  color:var(--seat-ink);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 18px 40px -28px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.08);
+  transition:opacity .3s var(--ease),filter .3s var(--ease);
 }
-.seat.winner .mark{animation:markPop .45s var(--spring) both}
-.seat.out{opacity:.42}
-[data-theme="kart"] .pod,[data-theme="music"] .pod{background:var(--glass)}
-[data-theme="kart"] .pod{border:2.5px solid var(--stroke);box-shadow:0 5px 0 0 rgba(23,26,51,.8)}
-[data-theme="music"] .pod{border:2px solid var(--stroke)}
-[data-theme="music"] .pod-head{background:#191510;color:#f4e9d8}
-[data-theme="halloween"] .pod,[data-theme="christmas"] .pod,[data-theme="newyear"] .pod{background:var(--glass)}
+.life-panel.down{filter:saturate(.35) brightness(.7)}
+
+.life-inner{
+  position:absolute;top:50%;left:50%;
+  width:100cqw;height:100cqh;
+  transform:translate(-50%,-50%);
+  display:grid;grid-template-rows:auto 1fr auto;
+}
+.life-panel.rot-180 .life-inner{transform:translate(-50%,-50%) rotate(180deg)}
+.life-panel.rot-90 .life-inner{
+  width:100cqh;height:100cqw;
+  transform:translate(-50%,-50%) rotate(90deg);
+}
+.life-panel.rot-270 .life-inner{
+  width:100cqh;height:100cqw;
+  transform:translate(-50%,-50%) rotate(270deg);
+}
+
+.life-step{
+  border:0;background:transparent;color:inherit;cursor:pointer;
+  font-size:26px;font-weight:800;line-height:1;padding:10px 0;
+  opacity:.75;transition:background .2s var(--ease),opacity .2s var(--ease);
+  -webkit-tap-highlight-color:transparent;
+}
+.life-step:hover{background:rgba(255,255,255,.12);opacity:1}
+.life-step:active{background:rgba(255,255,255,.2)}
+
+.life-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:0}
+.life-name{
+  display:flex;align-items:center;gap:7px;
+  font-size:12px;font-weight:700;letter-spacing:.6px;opacity:.85;
+  max-width:90%;overflow:hidden;
+}
+.life-name span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.life-name .av{display:flex}
+.life-name .av img,.life-name .av .ph{
+  width:22px;height:22px;border-radius:50%;object-fit:cover;
+  border:1.5px solid rgba(255,255,255,.5);background:rgba(0,0,0,.25);
+  display:grid;place-items:center;font-size:8px;font-weight:700;
+}
+.life-name .av>*+*{margin-left:-6px}
+.life-total{
+  font-family:Outfit,Inter,sans-serif;
+  font-size:clamp(44px,17cqmin,110px);font-weight:800;line-height:.95;
+  letter-spacing:-2px;font-variant-numeric:tabular-nums;
+  text-shadow:0 3px 10px rgba(0,0,0,.35);
+}
+.life-total.up{animation:lifeUp .5s var(--spring)}
+.life-total.down-tick{animation:lifeDown .5s var(--spring)}
+@keyframes lifeUp{35%{transform:translateY(-7px) scale(1.1)}}
+@keyframes lifeDown{35%{transform:translateY(6px) scale(.92)}}
+.life-out{
+  font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  padding:2px 9px;border-radius:99px;background:rgba(0,0,0,.4);
+}
+
+.cmd-strip{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.cmd-chip{
+  min-width:26px;height:22px;padding:0 5px;border-radius:7px;cursor:pointer;
+  font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;
+  color:#fff;background:var(--from-bg);
+  border:1px solid rgba(255,255,255,.35);
+  opacity:.55;transition:opacity .2s,transform .2s var(--spring),box-shadow .2s;
+}
+.cmd-chip:hover{opacity:1;transform:translateY(-2px)}
+.cmd-chip:active{transform:scale(.9)}
+.cmd-chip.hit{opacity:1}
+.cmd-chip.lethal{
+  opacity:1;border-color:#fff;
+  box-shadow:0 0 0 2px rgba(255,255,255,.6);
+  animation:pulseLethal 1.4s ease-in-out infinite;
+}
+@keyframes pulseLethal{50%{box-shadow:0 0 0 5px rgba(255,255,255,.15)}}
 
 /* ---------- confirm dialog (native confirm() is unreliable in webviews) ---------- */
 .modal{
@@ -694,6 +763,8 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
   linear-gradient(135deg,#07231a 0 28%,#c1121f 29% 64%,#f4f7f2 65% 100%)}
 .sw-newyear{background:
   linear-gradient(135deg,#05060c 0 30%,#e8eaf0 31% 62%,#4dabff 63% 100%)}
+.sw-mtg{background:
+  linear-gradient(135deg,#171310 0 26%,#f3e9cf 27% 58%,#8c2f26 59% 100%)}
 .sw-music{background:
   radial-gradient(circle at 50% 50%,#f1ebdf 0 12%,#e2482a 13% 34%,#17130f 35% 84%,#f1ebdf 85% 100%)}
 .theme-opt .note-ico{display:inline-block}
@@ -1504,6 +1575,201 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
   .theme-switch{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .theme-opt{justify-content:flex-start}
 }
+
+/* ---------- seat palette (each theme overrides these) ---------- */
+:root{
+  --seat-1:#6d28d9;
+  --seat-2:#a21caf;
+  --seat-3:#0e7490;
+  --seat-4:#047857;
+  --seat-5:#1d4ed8;
+  --seat-6:#be123c;
+  --seat-ink:#f7f5ff;
+}
+[data-theme="kart"]{
+  --seat-1:#d62828;--seat-2:#1d4ed8;--seat-3:#148f77;
+  --seat-4:#2d6a4f;--seat-5:#6d28d9;--seat-6:#c2410c;--seat-ink:#fffdf8;
+}
+[data-theme="music"]{
+  --seat-1:#c8442b;--seat-2:#0e7c73;--seat-3:#2b2520;
+  --seat-4:#8a5a2b;--seat-5:#5d6f34;--seat-6:#7a3b5c;--seat-ink:#fffdf8;
+}
+[data-theme="halloween"]{
+  --seat-1:#c2410c;--seat-2:#6d28d9;--seat-3:#4d7c0f;
+  --seat-4:#1f2937;--seat-5:#7c2d12;--seat-6:#365314;--seat-ink:#f6efe2;
+}
+[data-theme="christmas"]{
+  --seat-1:#9b2226;--seat-2:#2d6a4f;--seat-3:#1b4332;
+  --seat-4:#7f1d1d;--seat-5:#14532d;--seat-6:#4c1d95;--seat-ink:#f4f7f2;
+}
+[data-theme="newyear"]{
+  --seat-1:#1e293b;--seat-2:#1d4ed8;--seat-3:#6d28d9;
+  --seat-4:#0f766e;--seat-5:#9d174d;--seat-6:#334155;--seat-ink:#f2f4fa;
+}
+[data-theme="mtg"]{
+  /* the five colours of mana, then bronze */
+  --seat-1:#8a7f5c;
+  --seat-2:#1f5fa8;
+  --seat-3:#2a2438;
+  --seat-4:#9c2b21;
+  --seat-5:#1f6b3a;
+  --seat-6:#6b4b1f;
+  --seat-ink:#f7f2e2;
+}
+
+.life-panel{color:var(--seat-ink)}
+.life-panel[data-seat="0"]{background:var(--seat-1)}
+.life-panel[data-seat="1"]{background:var(--seat-2)}
+.life-panel[data-seat="2"]{background:var(--seat-3)}
+.life-panel[data-seat="3"]{background:var(--seat-4)}
+.life-panel[data-seat="4"]{background:var(--seat-5)}
+.life-panel[data-seat="5"]{background:var(--seat-6)}
+.cmd-chip[data-from="0"]{background:var(--seat-1)}
+.cmd-chip[data-from="1"]{background:var(--seat-2)}
+.cmd-chip[data-from="2"]{background:var(--seat-3)}
+.cmd-chip[data-from="3"]{background:var(--seat-4)}
+.cmd-chip[data-from="4"]{background:var(--seat-5)}
+.cmd-chip[data-from="5"]{background:var(--seat-6)}
+
+/* =========================================================
+   MTG SKIN - card frame: parchment, dark wood, mana colours
+   ========================================================= */
+[data-theme="mtg"]{
+  --ink:#241a10;
+  --ink-dim:#5c4a35;
+  --ink-faint:#8a7355;
+  --bg:#171310;
+  --glass:#f3e9cf;
+  --glass-2:#fbf5e4;
+  --stroke:#3b2b1a;
+  --stroke-2:#3b2b1a;
+  --v1:#8c2f26;
+  --v2:#1f5fa8;
+  --v3:#6b4b1f;
+  --win:#1f6b3a;
+  --bad:#9c2b21;
+  --r-lg:12px;
+  --r-md:9px;
+  --r-sm:7px;
+}
+[data-theme="mtg"] body{color:var(--ink)}
+[data-theme="mtg"] h2,[data-theme="mtg"] .cname,[data-theme="mtg"] .title-input,
+[data-theme="mtg"] .round-label b,[data-theme="mtg"] .champion .lbl,
+[data-theme="mtg"] .sc-crown,[data-theme="mtg"] .match-head,
+[data-theme="mtg"] .theme-copy b,[data-theme="mtg"] .life-name{
+  font-family:Cinzel,Outfit,serif;letter-spacing:.4px;
+}
+[data-theme="mtg"] h2{font-size:18px}
+[data-theme="mtg"] .cname{font-size:24px}
+
+/* a dark table with the light thrown on the middle of it */
+[data-theme="mtg"] .aurora{
+  background:
+    radial-gradient(70% 55% at 50% 0%, rgba(214,188,124,.18), transparent 65%),
+    radial-gradient(120% 90% at 50% 120%, #23190f 0%, #120e0a 60%);
+}
+[data-theme="mtg"] .blob{display:none}
+[data-theme="mtg"] .grid{
+  opacity:.5;mask-image:none;-webkit-mask-image:none;animation:none;
+  background-image:
+    repeating-linear-gradient(58deg, rgba(214,188,124,.05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-58deg, rgba(214,188,124,.04) 0 1px, transparent 1px 9px);
+}
+[data-theme="mtg"] .grid::after{content:none}
+
+/* every surface is a card: parchment inside a dark frame */
+[data-theme="mtg"] .glass,[data-theme="mtg"] .score-card,[data-theme="mtg"] .match{
+  background:linear-gradient(170deg,var(--glass-2),var(--glass));
+  border:2px solid var(--stroke);
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+  box-shadow:0 12px 26px -16px rgba(0,0,0,.8), inset 0 0 0 1px rgba(214,188,124,.35);
+}
+[data-theme="mtg"] .topbar{
+  background:linear-gradient(180deg,#fbf5e4,#efe3c6);
+  border-bottom:2px solid var(--stroke);backdrop-filter:none;
+}
+[data-theme="mtg"] .title-input{
+  background-image:none;-webkit-text-fill-color:var(--ink);color:var(--ink);font-size:23px;
+}
+[data-theme="mtg"] .title-input:focus{background-color:#fff;border-color:var(--v1)}
+[data-theme="mtg"] .logo{filter:none}
+[data-theme="mtg"] .logo svg{display:none}
+[data-theme="mtg"] .logo::before{content:"\1F0CF";font-size:23px;line-height:1}
+
+[data-theme="mtg"] .tabs,[data-theme="mtg"] .theme-switch,[data-theme="mtg"] .step-switch{
+  background:#e7dabb;border:2px solid var(--stroke);
+}
+[data-theme="mtg"] .tab{color:var(--ink-dim)}
+[data-theme="mtg"] .tab.is-active,[data-theme="mtg"] .theme-opt.is-on,
+[data-theme="mtg"] .step-opt.is-on{color:#f7f2e2}
+[data-theme="mtg"] .tab-glider,[data-theme="mtg"] .step-opt.is-on,
+[data-theme="mtg"] .theme-opt.is-on{background:var(--v1);box-shadow:none;border-color:var(--stroke)}
+[data-theme="mtg"] .pill,[data-theme="mtg"] .chip{
+  background:#fbf5e4;border:2px solid var(--stroke);color:var(--ink);
+}
+[data-theme="mtg"] .btn{
+  background:#fbf5e4;border:2px solid var(--stroke);color:var(--ink);box-shadow:none;
+}
+[data-theme="mtg"] .btn:hover{background:#f3e9cf}
+[data-theme="mtg"] .btn.primary{background:var(--v1);color:#f7f2e2;border-color:var(--stroke)}
+[data-theme="mtg"] .btn.danger{background:#f6e0dc;color:#7a1f18}
+[data-theme="mtg"] .btn.solid-danger{background:var(--bad);color:#fbf5e4;border:2px solid var(--stroke)}
+[data-theme="mtg"] .icon-btn,[data-theme="mtg"] .zoom,
+[data-theme="mtg"] .field input,[data-theme="mtg"] .p-name,
+[data-theme="mtg"] .pts-rules label,[data-theme="mtg"] .pts-rules input,
+[data-theme="mtg"] .use-entrants,[data-theme="mtg"] .sc-value{
+  background:#fbf5e4;border:2px solid var(--stroke);color:var(--ink);
+}
+[data-theme="mtg"] .icon-btn:hover{background:#f0e4c6;color:var(--ink)}
+[data-theme="mtg"] .photo-drop{background:#fbf5e4;border:2px dashed var(--v3);color:var(--ink-dim)}
+[data-theme="mtg"] .photo-drop.has-photo{border:2px solid var(--stroke)}
+[data-theme="mtg"] .empty{border:2px dashed rgba(59,43,26,.4);color:var(--ink-dim);background:rgba(251,245,228,.55)}
+[data-theme="mtg"] .modal{background:rgba(23,19,16,.55)}
+[data-theme="mtg"] #toast{
+  background:#fbf5e4;color:var(--ink);border:2px solid var(--stroke);
+  box-shadow:0 10px 22px -14px rgba(0,0,0,.7);
+}
+[data-theme="mtg"] .avatars img,[data-theme="mtg"] .avatars .ph,
+[data-theme="mtg"] .slot .av img,[data-theme="mtg"] .slot .av .ph{
+  border:2px solid var(--stroke);background:#e7dabb;color:var(--ink-dim);border-radius:6px;
+}
+[data-theme="mtg"] .avatars>*+*,[data-theme="mtg"] .slot .av>*+*{margin-left:3px}
+[data-theme="mtg"] .seed{background:var(--v3);color:#f7f2e2;border:2px solid var(--stroke);box-shadow:none}
+[data-theme="mtg"] .team-row{background:#fbf5e4;border:2px solid var(--stroke)}
+[data-theme="mtg"] .team-row:hover{background:#f3e9cf}
+[data-theme="mtg"] .round-label b{background:#fbf5e4;border:2px solid var(--stroke);color:var(--ink);box-shadow:none}
+[data-theme="mtg"] .round:last-child .round-label b{background:var(--v1);color:#f7f2e2}
+[data-theme="mtg"] .match-head{
+  background:#2b2015;color:#e7dabb;border-bottom:2px solid var(--stroke);
+}
+[data-theme="mtg"] .match-head .st{color:#fff}
+[data-theme="mtg"] .slot+.slot{border-top:2px solid rgba(59,43,26,.22)}
+[data-theme="mtg"] .slot:hover:not(.empty){background:#efe3c6}
+[data-theme="mtg"] .slot.winner{
+  background:linear-gradient(90deg,rgba(31,107,58,.22),rgba(31,107,58,.04));border-left-color:var(--win);
+}
+[data-theme="mtg"] .slot.winner .mark{color:var(--win)}
+[data-theme="mtg"] .connectors path{stroke:rgba(59,43,26,.4)}
+[data-theme="mtg"] .connectors path.flow{stroke:var(--win);filter:none}
+[data-theme="mtg"] .champion{
+  background:linear-gradient(110deg,rgba(140,47,38,.22),rgba(107,75,31,.16) 55%,rgba(31,107,58,.14));
+  border:2px solid var(--stroke);box-shadow:0 14px 30px -18px rgba(0,0,0,.7);
+}
+[data-theme="mtg"] .champion .lbl{color:#7a1f18}
+[data-theme="mtg"] .champion .cup svg{display:none}
+[data-theme="mtg"] .champion .cup::before{content:"\2694\FE0F";font-size:34px;line-height:1}
+[data-theme="mtg"] .champion .cav img,[data-theme="mtg"] .champion .cav .ph{border:2px solid var(--stroke)}
+[data-theme="mtg"] .sc-crown{background:var(--v1);color:#f7f2e2;border:2px solid var(--stroke)}
+[data-theme="mtg"] .score-card.leader{box-shadow:0 0 0 3px var(--v3), 0 12px 26px -18px rgba(0,0,0,.7)}
+[data-theme="mtg"] .step{background:#fbf5e4;border:2px solid var(--stroke);color:var(--ink);box-shadow:none}
+[data-theme="mtg"] .step.up:hover{background:var(--win);color:#f7f2e2}
+[data-theme="mtg"] .sc-value{font-family:Cinzel,Outfit,serif;font-size:28px}
+
+/* life panels get the card frame too */
+[data-theme="mtg"] .life-panel,[data-theme="music"] .life-panel,[data-theme="kart"] .life-panel{
+  border:2px solid var(--stroke);
+}
+[data-theme="mtg"] .life-total{font-family:Cinzel,Outfit,serif;letter-spacing:0}
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion:reduce){
