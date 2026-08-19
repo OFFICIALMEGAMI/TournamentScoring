@@ -17,6 +17,7 @@ let state = {
 };
 let editingId = null;                 // team currently being edited, or null
 let draftPhotos = [null, null];       // photos held in the form
+let draftSize = 2;                    // 2 = pair, 1 = solo entrant
 let zoom = 1;
 let lastSignature = '';               // bracket shape — entrance anims only on change
 let lastChampion = null;              // to fire confetti once per new champion
@@ -90,16 +91,24 @@ function save() {
 }
 
 function normalizeTeam(t) {
-  const p = Array.isArray(t.players) ? t.players : [];
-  return {
-    id: t.id || uid(),
-    name: String(t.name || 'Team'),
-    players: [0, 1].map(i => ({
-      name: String((p[i] && p[i].name) || ''),
-      photo: (p[i] && p[i].photo) || null
-    }))
-  };
+  const raw = Array.isArray(t.players) ? t.players : [];
+  const players = [0, 1].map(i => ({
+    name: String((raw[i] && raw[i].name) || ''),
+    photo: (raw[i] && raw[i].photo) || null
+  }));
+
+  // size 1 = a solo entrant, 2 = a pair. Older saves have no size field, so
+  // infer it from whether a second person was ever filled in.
+  let size = Number(t.size);
+  if (size !== 1 && size !== 2) {
+    size = (players[1].name || players[1].photo) ? 2 : 1;
+  }
+  if (size === 1) players.length = 1;
+
+  return { id: t.id || uid(), name: String(t.name || 'Entrant'), size, players };
 }
+
+const isSolo = team => team.players.length === 1;
 
 function normalizeScores(raw) {
   const out = {};
@@ -228,7 +237,8 @@ const avatarsHTML = (team, cls) => `<div class="${cls}">${team.players.map(avata
 
 function playerLine(team) {
   const names = team.players.map(p => p.name).filter(Boolean);
-  return names.length ? names.join(' & ') : 'No participant names';
+  if (names.length) return names.join(' & ');
+  return isSolo(team) ? 'No name yet' : 'No participant names';
 }
 
 /* ---------------- bracket model ---------------- */
@@ -1020,10 +1030,19 @@ function wireDrag() {
 /* ---------------- form ---------------- */
 
 function renderForm() {
-  $('#formHeading').textContent = editingId ? 'Edit team' : 'Add a team';
-  $('#formChip').textContent = editingId ? 'editing' : '2 players';
-  $('#btnSaveTeam').textContent = editingId ? 'Save changes' : 'Add team';
+  const solo = draftSize === 1;
+  const noun = solo ? 'player' : 'team';
+  $('#formHeading').textContent = `${editingId ? 'Edit' : 'Add a'} ${noun}`;
+  $('#btnSaveTeam').textContent = editingId ? 'Save changes' : `Add ${noun}`;
   $('#btnCancelEdit').hidden = !editingId;
+  $('#playersWrap').classList.toggle('solo', solo);
+  $('#player2').hidden = solo;
+  $('#pname1').placeholder = solo ? 'Player name' : 'Participant 1';
+  $$('.step-opt[data-size-pick]').forEach(b => {
+    const on = Number(b.dataset.sizePick) === draftSize;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
   [1, 2].forEach(slot => {
     const drop = $(`.photo-drop[data-drop="${slot}"]`);
     const img = drop.querySelector('.preview');
@@ -1037,6 +1056,7 @@ function renderForm() {
 function resetForm() {
   editingId = null;
   draftPhotos = [null, null];
+  draftSize = 2;
   $('#teamName').value = '';
   $$('.p-name').forEach(i => (i.value = ''));
   $('#formError').hidden = true;
@@ -1047,10 +1067,11 @@ function startEdit(id) {
   const t = teamById(id);
   if (!t) return;
   editingId = id;
-  draftPhotos = [t.players[0].photo, t.players[1].photo];
+  draftSize = t.players.length;
+  draftPhotos = [t.players[0].photo, t.players[1] ? t.players[1].photo : null];
   $('#teamName').value = t.name;
   $('.p-name[data-name="1"]').value = t.players[0].name;
-  $('.p-name[data-name="2"]').value = t.players[1].name;
+  $('.p-name[data-name="2"]').value = t.players[1] ? t.players[1].name : '';
   renderForm();
   showView('teams');
   $('.form-card').scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' });
@@ -1063,14 +1084,21 @@ function saveTeamFromForm() {
   const p2 = $('.p-name[data-name="2"]').value.trim();
   const err = $('#formError');
 
-  if (!name && !p1 && !p2) {
-    err.textContent = 'Give the team a name, or at least one participant.';
+  const solo = draftSize === 1;
+  if (!name && !p1 && (solo || !p2)) {
+    err.textContent = solo
+      ? 'Give the player a name.'
+      : 'Give the team a name, or at least one participant.';
     err.hidden = false;
     return;
   }
+  const players = solo
+    ? [{ name: p1, photo: draftPhotos[0] }]
+    : [{ name: p1, photo: draftPhotos[0] }, { name: p2, photo: draftPhotos[1] }];
   const payload = {
-    name: name || [p1, p2].filter(Boolean).join(' & '),
-    players: [{ name: p1, photo: draftPhotos[0] }, { name: p2, photo: draftPhotos[1] }]
+    name: name || (solo ? p1 : [p1, p2].filter(Boolean).join(' & ')),
+    size: draftSize,
+    players
   };
 
   if (editingId) {
@@ -1250,7 +1278,9 @@ function wire() {
       const team = teamById(id);
       if (!team) return;
       const ok = await askConfirm(`Delete ${team.name}?`, {
-        sub: 'The team and both photos are removed, and the bracket re-seeds.'
+        sub: isSolo(team)
+          ? 'The player and their photo are removed, and the bracket re-seeds.'
+          : 'The team and both photos are removed, and the bracket re-seeds.'
       });
       if (!ok) return;
       row.classList.add('removing');
@@ -1359,6 +1389,11 @@ function wire() {
   });
 
   $$('.theme-opt').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themePick)));
+
+  $$('.step-opt[data-size-pick]').forEach(b => b.addEventListener('click', () => {
+    draftSize = Number(b.dataset.sizePick);
+    renderForm();
+  }));
 
   wireDrag();
   wireTrace();

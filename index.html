@@ -39,7 +39,7 @@
   <nav class="tabs" role="tablist">
     <span class="tab-glider" id="tabGlider"></span>
     <button class="tab is-active" data-view="teams" role="tab">
-      <span class="tab-ico">👥</span> Teams <span class="pill" id="teamCount">0</span>
+      <span class="tab-ico">👥</span> Entrants <span class="pill" id="teamCount">0</span>
     </button>
     <button class="tab" data-view="bracket" role="tab">
       <span class="tab-ico">🗺️</span> Bracket
@@ -92,7 +92,10 @@
       <div class="glass form-card" style="--i:0">
         <div class="card-head">
           <h2 id="formHeading">Add a team</h2>
-          <span class="chip" id="formChip">2 players</span>
+          <span class="step-switch" role="radiogroup" aria-label="Entry type">
+            <button class="step-opt" data-size-pick="1" role="radio" aria-checked="false">Solo</button>
+            <button class="step-opt is-on" data-size-pick="2" role="radio" aria-checked="true">Pair</button>
+          </span>
         </div>
 
         <label class="field">
@@ -100,7 +103,7 @@
           <input id="teamName" placeholder="e.g. The Underdogs" maxlength="40" autocomplete="off">
         </label>
 
-        <div class="players">
+        <div class="players" id="playersWrap">
           <div class="player">
             <div class="photo-drop" data-drop="1" tabindex="0" role="button" aria-label="Add photo for participant 1">
               <img class="preview" alt="">
@@ -108,10 +111,10 @@
               <button class="photo-clear" type="button" title="Remove photo" hidden>✕</button>
               <span class="ring"></span>
             </div>
-            <input class="p-name" data-name="1" placeholder="Participant 1" maxlength="30" autocomplete="off">
+            <input class="p-name" data-name="1" placeholder="Participant 1" id="pname1" maxlength="30" autocomplete="off">
             <input type="file" class="p-file" data-file="1" accept="image/*" hidden>
           </div>
-          <div class="player">
+          <div class="player" id="player2">
             <div class="photo-drop" data-drop="2" tabindex="0" role="button" aria-label="Add photo for participant 2">
               <img class="preview" alt="">
               <span class="photo-hint"><b>＋</b>photo</span>
@@ -145,7 +148,7 @@
         <ul class="team-list" id="teamList"></ul>
         <div class="empty" id="teamsEmpty">
           <span class="empty-ico">🎽</span>
-          Nothing here yet — build your first team on the left.
+          Nothing here yet — add your first entrant on the left.
         </div>
 
         <button class="btn primary wide" id="btnGoBracket">Build the bracket <span class="arrow">→</span></button>
