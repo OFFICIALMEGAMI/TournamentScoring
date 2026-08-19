@@ -14,6 +14,7 @@ let state = {
   life: { count: 4, start: 40, useEntrants: false, players: [] },   // commander life
   darts: { game: '501', count: 2, useEntrants: false, doubleOut: true,
            mickeySet: 6, remaining: [], history: [], marks: [], winner: null },
+  barCollapsed: false,             // top bar folded down to just the tabs
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
@@ -85,6 +86,7 @@ function load() {
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
         darts: normalizeDarts(parsed.darts),
+        barCollapsed: !!parsed.barCollapsed,
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -381,6 +383,19 @@ function applyTheme() {
     b.classList.toggle('is-on', on);
     b.setAttribute('aria-checked', on ? 'true' : 'false');
   });
+}
+
+function applyBar() {
+  const on = !!state.barCollapsed;
+  document.body.classList.toggle('bar-collapsed', on);
+  const btn = $('#barToggle');
+  if (btn) {
+    btn.setAttribute('aria-expanded', on ? 'false' : 'true');
+    btn.title = on ? 'Expand the bar' : 'Collapse the bar';
+    btn.querySelector('.sr').textContent = btn.title;
+  }
+  moveGlider();
+  requestAnimationFrame(() => drawConnectors(false));
 }
 
 function setTheme(name) {
@@ -1871,6 +1886,7 @@ function importJSON(file) {
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
         darts: normalizeDarts(parsed.darts),
+        barCollapsed: !!parsed.barCollapsed,
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -2076,6 +2092,12 @@ function wire() {
 
   $$('.theme-opt').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themePick)));
 
+  $('#barToggle').addEventListener('click', () => {
+    state.barCollapsed = !state.barCollapsed;
+    save();
+    applyBar();
+  });
+
   $$('.step-opt[data-size-pick]').forEach(b => b.addEventListener('click', () => {
     draftSize = Number(b.dataset.sizePick);
     renderForm();
@@ -2092,6 +2114,7 @@ function wire() {
 
 load();
 applyTheme();
+applyBar();
 sizeConfetti();
 wire();
 renderForm();

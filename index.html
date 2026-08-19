@@ -19,7 +19,7 @@
 </div>
 <canvas id="confetti" aria-hidden="true"></canvas>
 
-<header class="topbar">
+<header class="topbar" id="topbar">
   <div class="brand">
     <span class="logo" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none">
@@ -60,6 +60,12 @@
     <button class="btn ghost sm" id="btnImport" title="Load a JSON export">Import</button>
     <input type="file" id="importFile" accept="application/json" hidden>
   </div>
+
+  <button class="bar-toggle" id="barToggle" aria-expanded="true" aria-controls="topbar"
+          title="Collapse the bar">
+    <span class="chev" aria-hidden="true"></span>
+    <span class="sr">Collapse the bar</span>
+  </button>
 </header>
 
 <main>

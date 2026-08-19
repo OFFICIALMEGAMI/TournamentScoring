@@ -93,6 +93,10 @@ The whole app is built to work one-handed:
 
 - Tap targets are at least 44px, inputs are 16px so iOS does not zoom on focus, and
   every control sets `touch-action: manipulation` to kill the double-tap zoom delay.
+- The **top bar collapses** with the round chevron on its right: the title and the
+  Export/Import buttons fold away, the tabs stay on one scrollable row, and the MTG
+  counter grows into the space. On a 375px phone that is 180px down to 70px. The
+  choice is remembered.
 - The tab strip scrolls sideways instead of stacking, and no page ever scrolls
   horizontally.
 - **Long press replaces right-click** - phones have no right-click, so taking a
