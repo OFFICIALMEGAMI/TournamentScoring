@@ -29,8 +29,9 @@ then open http://localhost:5599
 - **Darts** - three games on their own page. **501** and **301** count down from a
   typed turn total with a keypad and quick-score buttons; going below zero (or
   landing on one with double out) is a bust and the score stays put. **Mickey Mouse**
-  is the marks game: close 20 down to 15 (or 12) plus the bull, three marks each,
-  first to close everything wins. Undo covers the last turn, and averages, turn
+  is the marks game: 20 down to 10 plus Double, Triple and Bull, three marks to close
+  each row, first to close the whole board wins. The numbers played can be shortened
+  to 20-12 or 20-15 if you want a quicker leg. Undo covers the last turn, and averages, turn
   counts and an on-a-finish flag show on every player card.
 - **MTG** - a Commander life counter. Two to six seats, each panel rotated to face
   its own chair, starting life 20/30/40, and big tap targets at both ends of every
@@ -86,6 +87,24 @@ Nine skins, toggled on the Teams page and remembered with the rest of the state:
 - **Beer pong** — a wooden table seen from above, with a rack of red cups at one end
   and blue at the other. Cream cards with hard outlines, Bangers lettering, and
   cup-red accents. Rounds end in the Last Cup and results are Sunk.
+
+## On a phone
+
+The whole app is built to work one-handed:
+
+- Tap targets are at least 44px, inputs are 16px so iOS does not zoom on focus, and
+  every control sets `touch-action: manipulation` to kill the double-tap zoom delay.
+- The **top bar collapses** with the round chevron on its right: the title and the
+  Export/Import buttons fold away, the tabs stay on one scrollable row, and the MTG
+  counter grows into the space. On a 375px phone that is 180px down to 70px. The
+  choice is remembered.
+- The tab strip scrolls sideways instead of stacking, and no page ever scrolls
+  horizontally.
+- **Long press replaces right-click** - phones have no right-click, so taking a
+  commander damage counter or a Mickey Mouse mark back off works by holding the cell.
+- The MTG counter keeps its two-column table layout on a phone, sized with `dvh` so
+  the seats fill the screen under the browser chrome rather than being cut off.
+- Re-seeding entrants uses the arrow buttons on touch; drag and drop is mouse only.
 
 ## Keyboard
 

@@ -13,7 +13,8 @@ let state = {
   scores: {},                      // points counter: team id -> running total
   life: { count: 4, start: 40, useEntrants: false, players: [] },   // commander life
   darts: { game: '501', count: 2, useEntrants: false, doubleOut: true,
-           mickeySet: 6, remaining: [], history: [], marks: [], winner: null },
+           mickeySet: 10, remaining: [], history: [], marks: [], winner: null },
+  barCollapsed: false,             // top bar folded down to just the tabs
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
@@ -85,6 +86,7 @@ function load() {
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
         darts: normalizeDarts(parsed.darts),
+        barCollapsed: !!parsed.barCollapsed,
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -204,6 +206,39 @@ function askConfirm(message, { sub = '', okLabel = 'Delete' } = {}) {
     modal.addEventListener('click', backdrop);
     document.addEventListener('keydown', key);
   });
+}
+
+/**
+ * Touch parity for right-click: a long press runs the same "take one off" action.
+ * The click that follows the press is swallowed so it does not also add one.
+ */
+function wireLongPress(container, selector, action) {
+  let timer = null;
+  let fired = false;
+  let target = null;
+
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  container.addEventListener('pointerdown', e => {
+    const el = e.target.closest(selector);
+    if (!el) return;
+    target = el;
+    fired = false;
+    cancel();
+    timer = setTimeout(() => { fired = true; action(el); }, 420);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach(ev =>
+    container.addEventListener(ev, e => {
+      if (ev === 'pointermove' && e.pressure === 0) return;
+      cancel();
+    }));
+  container.addEventListener('click', e => {
+    if (fired && e.target.closest(selector) === target) {
+      e.preventDefault();
+      e.stopPropagation();
+      fired = false;
+    }
+  }, true);
 }
 
 function bump(el) {
@@ -348,6 +383,19 @@ function applyTheme() {
     b.classList.toggle('is-on', on);
     b.setAttribute('aria-checked', on ? 'true' : 'false');
   });
+}
+
+function applyBar() {
+  const on = !!state.barCollapsed;
+  document.body.classList.toggle('bar-collapsed', on);
+  const btn = $('#barToggle');
+  if (btn) {
+    btn.setAttribute('aria-expanded', on ? 'false' : 'true');
+    btn.title = on ? 'Expand the bar' : 'Collapse the bar';
+    btn.querySelector('.sr').textContent = btn.title;
+  }
+  moveGlider();
+  requestAnimationFrame(() => drawConnectors(false));
 }
 
 function setTheme(name) {
@@ -697,7 +745,7 @@ function seatHTML(seat, i, rot) {
             ${seat.cmd.map((n, from) => from === i ? '' : `
               <button class="cmd-chip ${n >= LETHAL_CMD ? 'lethal' : n ? 'hit' : ''}"
                       data-from="${from}"
-                      title="Commander damage from ${esc(seatName(from))} - click +1, right-click -1">${n}</button>`).join('')}
+                      title="Commander damage from ${esc(seatName(from))} - tap +1, long press or right-click -1">${n}</button>`).join('')}
           </div>
         </div>
 
@@ -787,11 +835,8 @@ function wireLife() {
     }
   });
 
-  // right-click a chip to take commander damage back off
-  grid.addEventListener('contextmenu', e => {
-    const chip = e.target.closest('.cmd-chip');
-    if (!chip) return;
-    e.preventDefault();
+  // right-click, or long press on a phone, takes commander damage back off
+  const cmdDown = chip => {
     const i = Number(chip.closest('.life-panel').dataset.seat);
     const from = Number(chip.dataset.from);
     const seat = state.life.players[i];
@@ -800,7 +845,14 @@ function wireLife() {
     seat.life += 1;
     save();
     paintSeat(i);
+  };
+  grid.addEventListener('contextmenu', e => {
+    const chip = e.target.closest('.cmd-chip');
+    if (!chip) return;
+    e.preventDefault();
+    cmdDown(chip);
   });
+  wireLongPress(grid, '.cmd-chip', cmdDown);
 
   $$('.step-opt[data-seats-pick]').forEach(b => b.addEventListener('click', () => {
     state.life.count = Number(b.dataset.seatsPick);
@@ -842,10 +894,14 @@ function wireLife() {
 /* ---------------- darts: 301 / 501 / mickey mouse ---------------- */
 
 const DART_GAMES = ['501', '301', 'mickey'];
+/* Keyed by the lowest number played. Doubles, triples and the bull are always in. */
 const MICKEY_SETS = {
-  6: [20, 19, 18, 17, 16, 15, 'B'],
-  9: [20, 19, 18, 17, 16, 15, 14, 13, 12, 'B']
+  15: [20, 19, 18, 17, 16, 15, 'D', 'T', 'B'],
+  12: [20, 19, 18, 17, 16, 15, 14, 13, 12, 'D', 'T', 'B'],
+  10: [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 'D', 'T', 'B']
 };
+const MICKEY_RANGES = [15, 12, 10];
+const TARGET_NAMES = { D: 'Double', T: 'Triple', B: 'Bull' };
 const QUICK_SCORES = [26, 41, 45, 60, 81, 100, 140, 180];
 const MARKS = ['', '/', 'X', '⊗'];          // 0-3 marks, third one closes
 
@@ -853,7 +909,7 @@ let dartEntry = '';                              // digits being typed, not pers
 
 function normalizeDarts(raw) {
   const out = {
-    game: '501', count: 2, useEntrants: false, doubleOut: true, mickeySet: 6,
+    game: '501', count: 2, useEntrants: false, doubleOut: true, mickeySet: 10,
     remaining: [], history: [], marks: [], winner: null
   };
   if (raw && typeof raw === 'object') {
@@ -861,7 +917,10 @@ function normalizeDarts(raw) {
     if (Number(raw.count) >= 2 && Number(raw.count) <= 6) out.count = Math.round(Number(raw.count));
     out.useEntrants = !!raw.useEntrants;
     out.doubleOut = raw.doubleOut !== false;
-    out.mickeySet = Number(raw.mickeySet) === 9 ? 9 : 6;
+    const set = Number(raw.mickeySet);
+    // 6 and 9 were the old keys for the 20-15 and 20-12 boards
+    // 6 and 9 were the old keys, from before doubles, triples and 20-10 existed
+    out.mickeySet = MICKEY_RANGES.includes(set) ? set : 10;
     if (Array.isArray(raw.remaining)) out.remaining = raw.remaining.map(n => Math.round(Number(n) || 0));
     if (Array.isArray(raw.history)) {
       out.history = raw.history
@@ -897,7 +956,7 @@ function resetDarts() {
 }
 
 const dartTargets = () => MICKEY_SETS[state.darts.mickeySet];
-const targetLabel = t => (t === 'B' ? 'Bull' : t);
+const targetLabel = t => TARGET_NAMES[t] || t;
 
 function dartName(i) {
   if (state.darts.useEntrants && state.teams[i]) return state.teams[i].name;
@@ -1011,14 +1070,14 @@ function renderMickey() {
     <thead><tr><th class="target-col">Target</th>${head}</tr></thead>
     <tbody>
       ${targets.map(t => `
-        <tr>
+        <tr class="${TARGET_NAMES[t] ? 'special' : ''}">
           <th class="target-col">${targetLabel(t)}</th>
           ${d.marks.map((m, i) => {
             const n = m[t] || 0;
             return `<td>
               <button class="mark ${n >= 3 ? 'closed' : n ? 'part' : ''}"
                       data-player="${i}" data-target="${t}"
-                      title="Click for a mark, right-click to take one off">${MARKS[n]}</button>
+                      title="Tap for a mark, long press or right-click to take one off">${MARKS[n]}</button>
             </td>`;
           }).join('')}
         </tr>`).join('')}
@@ -1030,6 +1089,24 @@ function renderMickey() {
         }).join('')}
       </tr>
     </tbody>`;
+}
+
+/** Repaints one mark cell and that player's tally, leaving the table in place. */
+function paintMickeyCell(i, t) {
+  const cell = $(`#mickeyTable .mark[data-player="${i}"][data-target="${t}"]`);
+  if (!cell) { renderDarts(); return; }
+  const n = state.darts.marks[i][t] || 0;
+  cell.textContent = MARKS[n];
+  cell.classList.toggle('closed', n >= 3);
+  cell.classList.toggle('part', n > 0 && n < 3);
+
+  const targets = dartTargets();
+  const done = targets.filter(x => (state.darts.marks[i][x] || 0) >= 3).length;
+  const tally = $$('#mickeyTable .mickey-total td')[i];
+  if (tally) {
+    tally.textContent = `${done}/${targets.length}`;
+    tally.classList.toggle('all', done === targets.length);
+  }
 }
 
 function renderDartWinner() {
@@ -1173,24 +1250,39 @@ function wireDarts() {
     const i = Number(mark.dataset.player);
     const t = mark.dataset.target;
     const marks = state.darts.marks[i];
-    marks[t] = Math.min(3, (marks[t] || 0) + 1);
-    if (mickeyClosed(i)) { state.darts.winner = i; fireConfetti(); }
+    if ((marks[t] || 0) >= 3) return;
+    marks[t] = (marks[t] || 0) + 1;
     save();
-    renderDarts();
+
+    if (mickeyClosed(i)) {
+      state.darts.winner = i;
+      fireConfetti();
+      renderDarts();                 // the win banner needs a full pass
+    } else {
+      paintMickeyCell(i, t);         // otherwise nothing moves under the finger
+      updateDartsInfo();
+    }
   });
 
+  const markDown = mark => {
+    const i = Number(mark.dataset.player);
+    const t = mark.dataset.target;
+    const marks = state.darts.marks[i];
+    if (!marks[t]) return;
+    marks[t] -= 1;
+    const wasWinner = state.darts.winner === i;
+    if (wasWinner && !mickeyClosed(i)) state.darts.winner = null;
+    save();
+    if (wasWinner) renderDarts();    // the banner has to come back off
+    else { paintMickeyCell(i, t); updateDartsInfo(); }
+  };
   $('#mickeyTable').addEventListener('contextmenu', e => {
     const mark = e.target.closest('.mark');
     if (!mark) return;
     e.preventDefault();
-    const i = Number(mark.dataset.player);
-    const t = mark.dataset.target;
-    const marks = state.darts.marks[i];
-    marks[t] = Math.max(0, (marks[t] || 0) - 1);
-    if (state.darts.winner === i && !mickeyClosed(i)) state.darts.winner = null;
-    save();
-    renderDarts();
+    markDown(mark);
   });
+  wireLongPress($('#mickeyTable'), '.mark', markDown);
 
   // typing works too, when the darts view is the one on screen
   document.addEventListener('keydown', e => {
@@ -1830,6 +1922,7 @@ function importJSON(file) {
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
         darts: normalizeDarts(parsed.darts),
+        barCollapsed: !!parsed.barCollapsed,
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -2035,6 +2128,12 @@ function wire() {
 
   $$('.theme-opt').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themePick)));
 
+  $('#barToggle').addEventListener('click', () => {
+    state.barCollapsed = !state.barCollapsed;
+    save();
+    applyBar();
+  });
+
   $$('.step-opt[data-size-pick]').forEach(b => b.addEventListener('click', () => {
     draftSize = Number(b.dataset.sizePick);
     renderForm();
@@ -2051,6 +2150,7 @@ function wire() {
 
 load();
 applyTheme();
+applyBar();
 sizeConfetti();
 wire();
 renderForm();
