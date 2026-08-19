@@ -206,6 +206,39 @@ function askConfirm(message, { sub = '', okLabel = 'Delete' } = {}) {
   });
 }
 
+/**
+ * Touch parity for right-click: a long press runs the same "take one off" action.
+ * The click that follows the press is swallowed so it does not also add one.
+ */
+function wireLongPress(container, selector, action) {
+  let timer = null;
+  let fired = false;
+  let target = null;
+
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  container.addEventListener('pointerdown', e => {
+    const el = e.target.closest(selector);
+    if (!el) return;
+    target = el;
+    fired = false;
+    cancel();
+    timer = setTimeout(() => { fired = true; action(el); }, 420);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach(ev =>
+    container.addEventListener(ev, e => {
+      if (ev === 'pointermove' && e.pressure === 0) return;
+      cancel();
+    }));
+  container.addEventListener('click', e => {
+    if (fired && e.target.closest(selector) === target) {
+      e.preventDefault();
+      e.stopPropagation();
+      fired = false;
+    }
+  }, true);
+}
+
 function bump(el) {
   if (!el || calm) return;
   el.classList.remove('bump');
@@ -697,7 +730,7 @@ function seatHTML(seat, i, rot) {
             ${seat.cmd.map((n, from) => from === i ? '' : `
               <button class="cmd-chip ${n >= LETHAL_CMD ? 'lethal' : n ? 'hit' : ''}"
                       data-from="${from}"
-                      title="Commander damage from ${esc(seatName(from))} - click +1, right-click -1">${n}</button>`).join('')}
+                      title="Commander damage from ${esc(seatName(from))} - tap +1, long press or right-click -1">${n}</button>`).join('')}
           </div>
         </div>
 
@@ -787,11 +820,8 @@ function wireLife() {
     }
   });
 
-  // right-click a chip to take commander damage back off
-  grid.addEventListener('contextmenu', e => {
-    const chip = e.target.closest('.cmd-chip');
-    if (!chip) return;
-    e.preventDefault();
+  // right-click, or long press on a phone, takes commander damage back off
+  const cmdDown = chip => {
     const i = Number(chip.closest('.life-panel').dataset.seat);
     const from = Number(chip.dataset.from);
     const seat = state.life.players[i];
@@ -800,7 +830,14 @@ function wireLife() {
     seat.life += 1;
     save();
     paintSeat(i);
+  };
+  grid.addEventListener('contextmenu', e => {
+    const chip = e.target.closest('.cmd-chip');
+    if (!chip) return;
+    e.preventDefault();
+    cmdDown(chip);
   });
+  wireLongPress(grid, '.cmd-chip', cmdDown);
 
   $$('.step-opt[data-seats-pick]').forEach(b => b.addEventListener('click', () => {
     state.life.count = Number(b.dataset.seatsPick);
@@ -1018,7 +1055,7 @@ function renderMickey() {
             return `<td>
               <button class="mark ${n >= 3 ? 'closed' : n ? 'part' : ''}"
                       data-player="${i}" data-target="${t}"
-                      title="Click for a mark, right-click to take one off">${MARKS[n]}</button>
+                      title="Tap for a mark, long press or right-click to take one off">${MARKS[n]}</button>
             </td>`;
           }).join('')}
         </tr>`).join('')}
@@ -1179,10 +1216,7 @@ function wireDarts() {
     renderDarts();
   });
 
-  $('#mickeyTable').addEventListener('contextmenu', e => {
-    const mark = e.target.closest('.mark');
-    if (!mark) return;
-    e.preventDefault();
+  const markDown = mark => {
     const i = Number(mark.dataset.player);
     const t = mark.dataset.target;
     const marks = state.darts.marks[i];
@@ -1190,7 +1224,14 @@ function wireDarts() {
     if (state.darts.winner === i && !mickeyClosed(i)) state.darts.winner = null;
     save();
     renderDarts();
+  };
+  $('#mickeyTable').addEventListener('contextmenu', e => {
+    const mark = e.target.closest('.mark');
+    if (!mark) return;
+    e.preventDefault();
+    markDown(mark);
   });
+  wireLongPress($('#mickeyTable'), '.mark', markDown);
 
   // typing works too, when the darts view is the one on screen
   document.addEventListener('keydown', e => {

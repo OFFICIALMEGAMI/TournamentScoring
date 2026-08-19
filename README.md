@@ -87,6 +87,20 @@ Nine skins, toggled on the Teams page and remembered with the rest of the state:
   and blue at the other. Cream cards with hard outlines, Bangers lettering, and
   cup-red accents. Rounds end in the Last Cup and results are Sunk.
 
+## On a phone
+
+The whole app is built to work one-handed:
+
+- Tap targets are at least 44px, inputs are 16px so iOS does not zoom on focus, and
+  every control sets `touch-action: manipulation` to kill the double-tap zoom delay.
+- The tab strip scrolls sideways instead of stacking, and no page ever scrolls
+  horizontally.
+- **Long press replaces right-click** - phones have no right-click, so taking a
+  commander damage counter or a Mickey Mouse mark back off works by holding the cell.
+- The MTG counter keeps its two-column table layout on a phone, sized with `dvh` so
+  the seats fill the screen under the browser chrome rather than being cut off.
+- Re-seeding entrants uses the arrow buttons on touch; drag and drop is mouse only.
+
 ## Keyboard
 
 - `+` / `-` — zoom the bracket

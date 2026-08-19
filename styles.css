@@ -602,10 +602,11 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
 .life-grid[data-count="5"],.life-grid[data-count="6"]{grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr)}
 .life-grid[data-count="5"] .life-panel:nth-child(5){grid-column:span 2}
 @media (max-width:700px){
-  /* a definite height, not min-height: container query units resolve to 0 when the
-     container block size is indefinite, which collapses the rotated faces */
-  .life-grid{height:auto;grid-template-columns:1fr!important;grid-template-rows:none!important}
-  .life-grid .life-panel{height:190px;grid-column:auto!important}
+  /* keep the seats side by side on a phone - that is the whole point of a table
+     counter - and fill the real viewport height (dvh dodges the browser chrome) */
+  .life-grid{height:calc(100dvh - 210px);min-height:420px;gap:7px}
+  .life-grid[data-count="2"]{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .life-grid .cmd-strip{gap:4px}
 }
 
 /* if container query units are unavailable, drop the rotation rather than collapse */
@@ -763,7 +764,7 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
 .standings.mickey thead th.active{color:var(--v1)}
 .standings.mickey td{text-align:center;padding:6px}
 .mark{
-  width:100%;min-width:42px;padding:8px 0;border-radius:var(--r-sm);cursor:pointer;
+  width:100%;min-width:42px;min-height:38px;padding:8px 0;border-radius:var(--r-sm);cursor:pointer;
   font-size:17px;font-weight:800;line-height:1.1;
   background:rgba(255,255,255,.05);border:1px solid var(--stroke);color:var(--ink);
   transition:background .2s var(--ease),transform .2s var(--spring),border-color .2s;
@@ -2091,6 +2092,80 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
 [data-theme="beerpong"] .sc-crown{background:var(--v3);color:#3d2413;border:2px solid var(--stroke);font-size:14px}
 [data-theme="beerpong"] .life-panel{border:2.5px solid var(--stroke)}
 
+
+
+/* =========================================================
+   PHONES - bigger targets, scrollable tabs, no iOS zoom
+   ========================================================= */
+/* stop the 300ms tap delay and double-tap zoom on every control */
+button,.tab,.theme-opt,.step-opt,.key,.mark,.cmd-chip,.life-step,.slot,.seat,.icon-btn{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.life-total,.dp-score,.sc-value,.dart-entry,.life-name,.cmd-chip,.mark,.key{
+  -webkit-user-select:none;user-select:none;
+}
+.life-grid{overscroll-behavior:contain}
+
+@media (max-width:860px){
+  /* the tab strip scrolls sideways instead of wrapping into a tall block */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;max-width:100%}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;padding:9px 14px}
+  .topbar{gap:12px;padding:10px 14px}
+  .title-input{font-size:19px;width:min(60vw,260px);padding:5px 8px}
+  .topbar-actions{margin-left:0}
+}
+
+@media (max-width:700px){
+  main{padding:16px 14px calc(48px + env(safe-area-inset-bottom))}
+
+  /* iOS zooms the page when a focused input is under 16px */
+  .field input,.p-name,.pts-rules input,.sc-value,.standings input{font-size:16px}
+
+  /* 44px minimum on anything you have to hit with a thumb */
+  .icon-btn{width:40px;height:40px;font-size:15px}
+  .row-actions{gap:6px;opacity:1}
+  .step-opt{padding:10px 14px}
+  .theme-opt{padding:10px 12px}
+  .btn{padding:12px 16px}
+  .btn.sm{padding:10px 13px}
+  .step{width:56px;height:44px;font-size:22px}
+  .cmd-chip{min-width:34px;height:30px;font-size:12px;opacity:.85}
+  .mark{min-width:48px;min-height:46px;padding:12px 0;font-size:19px}
+  .key{padding:17px 0;font-size:21px}
+  .life-step{padding:16px 0;font-size:30px;opacity:.9}
+
+  /* stacks that were still assuming a desktop width */
+  .scoreboard{grid-template-columns:1fr;gap:12px}
+  .score-card{grid-template-columns:minmax(0,1fr) auto auto;padding:13px}
+  .sc-value{width:84px;font-size:30px}
+  .dart-players{grid-template-columns:1fr 1fr;gap:10px}
+  .dp-score{font-size:40px}
+  .theme-bar,.points-bar,.life-bar,.darts-bar,.bracket-bar{padding:12px}
+  .head-actions{gap:7px}
+  .life-name{font-size:11px}
+  .life-name .av img,.life-name .av .ph{width:18px;height:18px}
+  .champion{gap:12px;padding:14px}
+  .champion .cname{font-size:20px}
+  .champion .cav img,.champion .cav .ph{width:42px;height:42px}
+  .modal-card{padding:18px}
+  .bracket-scroll{padding:6px 2px 18px}
+}
+
+@media (max-width:460px){
+  /* room is tight: the icon carries the tab, the label follows on wider phones */
+  .tab{padding:9px 11px;gap:6px}
+  .dart-players{grid-template-columns:1fr}
+  .theme-switch{grid-template-columns:1fr}
+  .quick-scores .quick{padding:11px 14px;font-size:14px}
+  .life-grid{height:calc(100dvh - 240px)}
+}
+
+/* phones are held in one hand: keep the sticky form card from eating the screen */
+@media (max-width:900px) and (max-height:900px){
+  .form-card{position:static}
+}
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion:reduce){
