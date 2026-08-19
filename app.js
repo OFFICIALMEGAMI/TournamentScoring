@@ -12,6 +12,8 @@ let state = {
   picks: {},                       // bracket: match key -> winning team id
   scores: {},                      // points counter: team id -> running total
   life: { count: 4, start: 40, useEntrants: false, players: [] },   // commander life
+  darts: { game: '501', count: 2, useEntrants: false, doubleOut: true,
+           mickeySet: 6, remaining: [], history: [], marks: [], winner: null },
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
@@ -82,6 +84,7 @@ function load() {
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
+        darts: normalizeDarts(parsed.darts),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -836,6 +839,376 @@ function wireLife() {
   });
 }
 
+/* ---------------- darts: 301 / 501 / mickey mouse ---------------- */
+
+const DART_GAMES = ['501', '301', 'mickey'];
+const MICKEY_SETS = {
+  6: [20, 19, 18, 17, 16, 15, 'B'],
+  9: [20, 19, 18, 17, 16, 15, 14, 13, 12, 'B']
+};
+const QUICK_SCORES = [26, 41, 45, 60, 81, 100, 140, 180];
+const MARKS = ['', '/', 'X', '⊗'];          // 0-3 marks, third one closes
+
+let dartEntry = '';                              // digits being typed, not persisted
+
+function normalizeDarts(raw) {
+  const out = {
+    game: '501', count: 2, useEntrants: false, doubleOut: true, mickeySet: 6,
+    remaining: [], history: [], marks: [], winner: null
+  };
+  if (raw && typeof raw === 'object') {
+    if (DART_GAMES.includes(raw.game)) out.game = raw.game;
+    if (Number(raw.count) >= 2 && Number(raw.count) <= 6) out.count = Math.round(Number(raw.count));
+    out.useEntrants = !!raw.useEntrants;
+    out.doubleOut = raw.doubleOut !== false;
+    out.mickeySet = Number(raw.mickeySet) === 9 ? 9 : 6;
+    if (Array.isArray(raw.remaining)) out.remaining = raw.remaining.map(n => Math.round(Number(n) || 0));
+    if (Array.isArray(raw.history)) {
+      out.history = raw.history
+        .filter(t => t && typeof t === 'object')
+        .map(t => ({ p: Math.round(Number(t.p) || 0), v: Math.round(Number(t.v) || 0), bust: !!t.bust }));
+    }
+    if (Array.isArray(raw.marks)) out.marks = raw.marks.map(m => (m && typeof m === 'object' ? { ...m } : {}));
+    if (Number.isInteger(raw.winner)) out.winner = raw.winner;
+  }
+  syncDarts(out);
+  return out;
+}
+
+/** Keeps the per-player arrays the right length for the current game. */
+function syncDarts(d) {
+  const start = d.game === 'mickey' ? 0 : Number(d.game);
+  while (d.remaining.length < d.count) d.remaining.push(start);
+  d.remaining.length = d.count;
+  while (d.marks.length < d.count) d.marks.push({});
+  d.marks.length = d.count;
+  if (d.winner !== null && d.winner >= d.count) d.winner = null;
+}
+
+function resetDarts() {
+  const d = state.darts;
+  d.remaining = [];
+  d.marks = [];
+  d.history = [];
+  d.winner = null;
+  syncDarts(d);
+  if (d.game !== 'mickey') d.remaining = d.remaining.map(() => Number(d.game));
+  dartEntry = '';
+}
+
+const dartTargets = () => MICKEY_SETS[state.darts.mickeySet];
+const targetLabel = t => (t === 'B' ? 'Bull' : t);
+
+function dartName(i) {
+  if (state.darts.useEntrants && state.teams[i]) return state.teams[i].name;
+  return `Player ${i + 1}`;
+}
+
+/** Whose turn it is: the history length rotates through the players. */
+function activePlayer() {
+  const d = state.darts;
+  if (d.winner !== null) return null;
+  return d.history.length % d.count;
+}
+
+function dartStats(i) {
+  const turns = state.darts.history.filter(t => t.p === i);
+  const scored = turns.reduce((n, t) => n + (t.bust ? 0 : t.v), 0);
+  return {
+    turns: turns.length,
+    scored,
+    avg: turns.length ? Math.round((scored / turns.length) * 10) / 10 : 0,
+    last: turns.length ? turns[turns.length - 1] : null
+  };
+}
+
+/** All marks filled on every target. */
+function mickeyClosed(i) {
+  return dartTargets().every(t => (state.darts.marks[i][t] || 0) >= 3);
+}
+
+/* ---------------- render: darts ---------------- */
+
+function renderDarts() {
+  const d = state.darts;
+  syncDarts(d);
+
+  $$('.step-opt[data-game-pick]').forEach(b => {
+    const on = b.dataset.gamePick === d.game;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $$('.step-opt[data-dartcount-pick]').forEach(b => {
+    const on = Number(b.dataset.dartcountPick) === d.count;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('#dartsEntrants').checked = d.useEntrants;
+  $('#dartsEntrants').disabled = state.teams.length < 2;
+  $('#doubleOut').checked = d.doubleOut;
+
+  const mickey = d.game === 'mickey';
+  $('#countdownPanel').hidden = mickey;
+  $('#mickeyPanel').hidden = !mickey;
+  $('#doubleOutWrap').hidden = mickey;
+  $('#mickeySetWrap').hidden = !mickey;
+  $$('.step-opt[data-mickey-pick]').forEach(b => {
+    const on = Number(b.dataset.mickeyPick) === d.mickeySet;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  if (mickey) renderMickey();
+  else renderCountdown();
+  renderDartWinner();
+  updateDartsInfo();
+}
+
+function updateDartsInfo() {
+  const d = state.darts;
+  const name = d.game === 'mickey' ? 'Mickey Mouse' : d.game;
+  const turn = activePlayer();
+  $('#dartsInfo').innerHTML = d.winner !== null
+    ? `<b>${esc(dartName(d.winner))}</b> takes it - ${esc(name)}`
+    : `<b>${esc(name)}</b> · ${d.count} players` +
+      (turn !== null ? ` · <b>${esc(dartName(turn))}</b> to throw` : '');
+}
+
+function renderCountdown() {
+  const d = state.darts;
+  const turn = activePlayer();
+  $('#dartPlayers').innerHTML = d.remaining.map((rem, i) => {
+    const s = dartStats(i);
+    const finish = rem <= 170 && rem > 1;
+    return `
+      <div class="dart-player ${i === turn ? 'active' : ''} ${d.winner === i ? 'won' : ''}" data-player="${i}">
+        <div class="dp-name">${esc(dartName(i))}</div>
+        <div class="dp-score">${rem}</div>
+        <div class="dp-meta">
+          <span>${s.turns} turn${s.turns === 1 ? '' : 's'}</span>
+          <span>avg ${s.avg}</span>
+          ${s.last ? `<span class="${s.last.bust ? 'bust' : ''}">last ${s.last.bust ? 'bust' : s.last.v}</span>` : ''}
+        </div>
+        ${finish ? '<div class="dp-finish">on a finish</div>' : ''}
+      </div>`;
+  }).join('');
+
+  $('#dartEntry').textContent = dartEntry || '0';
+  $('#btnDartUndo').disabled = !d.history.length;
+  $$('#dartKeypad .key').forEach(k => (k.disabled = d.winner !== null));
+  $('#quickScores').innerHTML = QUICK_SCORES
+    .map(v => `<button class="btn ghost sm quick" data-quick="${v}" ${d.winner !== null ? 'disabled' : ''}>${v}</button>`)
+    .join('');
+}
+
+function renderMickey() {
+  const d = state.darts;
+  const targets = dartTargets();
+  const head = d.marks.map((_, i) =>
+    `<th class="${activePlayer() === i ? 'active' : ''}">${esc(dartName(i))}</th>`).join('');
+
+  $('#mickeyTable').innerHTML = `
+    <thead><tr><th class="target-col">Target</th>${head}</tr></thead>
+    <tbody>
+      ${targets.map(t => `
+        <tr>
+          <th class="target-col">${targetLabel(t)}</th>
+          ${d.marks.map((m, i) => {
+            const n = m[t] || 0;
+            return `<td>
+              <button class="mark ${n >= 3 ? 'closed' : n ? 'part' : ''}"
+                      data-player="${i}" data-target="${t}"
+                      title="Click for a mark, right-click to take one off">${MARKS[n]}</button>
+            </td>`;
+          }).join('')}
+        </tr>`).join('')}
+      <tr class="mickey-total">
+        <th class="target-col">Closed</th>
+        ${d.marks.map((m, i) => {
+          const done = targets.filter(t => (m[t] || 0) >= 3).length;
+          return `<td class="${done === targets.length ? 'all' : ''}">${done}/${targets.length}</td>`;
+        }).join('')}
+      </tr>
+    </tbody>`;
+}
+
+function renderDartWinner() {
+  const box = $('#dartWinner');
+  const d = state.darts;
+  if (d.winner === null) { box.hidden = true; box.innerHTML = ''; return; }
+  const team = d.useEntrants ? state.teams[d.winner] : null;
+  box.hidden = false;
+  box.innerHTML = `
+    <span class="cup" id="dartCup" title="Celebrate again">\u{1F3AF}</span>
+    <div>
+      <div class="lbl">${d.game === 'mickey' ? 'All closed' : 'Checkout'}</div>
+      <div class="cname">${esc(dartName(d.winner))}</div>
+      <div class="cplayers">${d.game === 'mickey'
+        ? 'Every target closed'
+        : `${d.game} finished in ${dartStats(d.winner).turns} turns`}</div>
+    </div>
+    ${team ? avatarsHTML(team, 'cav') : ''}`;
+  $('#dartCup').addEventListener('click', fireConfetti);
+}
+
+/* ---------------- darts interactions ---------------- */
+
+function commitDartScore(origin) {
+  const d = state.darts;
+  if (d.winner !== null) return;
+  const value = Number(dartEntry || '0');
+  if (!Number.isFinite(value) || value < 0 || value > 180) {
+    toast('A turn is 0 to 180');
+    dartEntry = '';
+    renderCountdown();
+    return;
+  }
+  const i = activePlayer();
+  const rem = d.remaining[i] - value;
+  const bust = rem < 0 || (d.doubleOut && rem === 1);
+
+  if (bust) {
+    d.history.push({ p: i, v: value, bust: true });
+    toast(`Bust - ${dartName(i)} stays on ${d.remaining[i]}`);
+  } else {
+    d.remaining[i] = rem;
+    d.history.push({ p: i, v: value, bust: false });
+    if (rem === 0) {
+      d.winner = i;
+      fireConfetti();
+    } else if (origin) {
+      spray({ x: origin.x, y: origin.y, count: 8, power: 5, size: .5, decay: .05 });
+    }
+  }
+  dartEntry = '';
+  save();
+  renderDarts();
+}
+
+function undoDart() {
+  const d = state.darts;
+  const last = d.history.pop();
+  if (!last) return;
+  if (!last.bust) d.remaining[last.p] += last.v;
+  d.winner = null;
+  dartEntry = '';
+  save();
+  renderDarts();
+  toast('Turn undone');
+}
+
+function wireDarts() {
+  $$('.step-opt[data-game-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.game = b.dataset.gamePick;
+    resetDarts();
+    save();
+    renderDarts();
+    toast(state.darts.game === 'mickey' ? 'Mickey Mouse - close every target' : `New ${state.darts.game}`);
+  }));
+
+  $$('.step-opt[data-dartcount-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.count = Number(b.dataset.dartcountPick);
+    resetDarts();
+    save();
+    renderDarts();
+  }));
+
+  $$('.step-opt[data-mickey-pick]').forEach(b => b.addEventListener('click', () => {
+    state.darts.mickeySet = Number(b.dataset.mickeyPick);
+    resetDarts();
+    save();
+    renderDarts();
+  }));
+
+  $('#dartsEntrants').addEventListener('change', () => {
+    state.darts.useEntrants = $('#dartsEntrants').checked;
+    save();
+    renderDarts();
+  });
+
+  $('#doubleOut').addEventListener('change', () => {
+    state.darts.doubleOut = $('#doubleOut').checked;
+    save();
+  });
+
+  $('#dartKeypad').addEventListener('click', e => {
+    const key = e.target.closest('.key');
+    if (!key) return;
+    const k = key.dataset.key;
+    if (k === 'back') dartEntry = dartEntry.slice(0, -1);
+    else if (k === 'clear') dartEntry = '';
+    else if (k === 'enter') return commitDartScore({ x: e.clientX, y: e.clientY });
+    else if (dartEntry.length < 3) dartEntry = (dartEntry + k).replace(/^0+(?=\d)/, '');
+    $('#dartEntry').textContent = dartEntry || '0';
+  });
+
+  $('#quickScores').addEventListener('click', e => {
+    const q = e.target.closest('.quick');
+    if (!q) return;
+    dartEntry = q.dataset.quick;
+    commitDartScore({ x: e.clientX, y: e.clientY });
+  });
+
+  $('#btnDartUndo').addEventListener('click', undoDart);
+
+  $('#btnDartReset').addEventListener('click', async () => {
+    const started = state.darts.history.length || state.darts.marks.some(m => Object.keys(m).length);
+    if (started) {
+      const ok = await askConfirm('Start a new leg?', {
+        sub: 'Scores, marks and turn history all clear.',
+        okLabel: 'New leg'
+      });
+      if (!ok) return;
+    }
+    resetDarts();
+    save();
+    renderDarts();
+    toast('New leg');
+  });
+
+  // mickey marks
+  $('#mickeyTable').addEventListener('click', e => {
+    const mark = e.target.closest('.mark');
+    if (!mark || state.darts.winner !== null) return;
+    const i = Number(mark.dataset.player);
+    const t = mark.dataset.target;
+    const marks = state.darts.marks[i];
+    marks[t] = Math.min(3, (marks[t] || 0) + 1);
+    if (mickeyClosed(i)) { state.darts.winner = i; fireConfetti(); }
+    save();
+    renderDarts();
+  });
+
+  $('#mickeyTable').addEventListener('contextmenu', e => {
+    const mark = e.target.closest('.mark');
+    if (!mark) return;
+    e.preventDefault();
+    const i = Number(mark.dataset.player);
+    const t = mark.dataset.target;
+    const marks = state.darts.marks[i];
+    marks[t] = Math.max(0, (marks[t] || 0) - 1);
+    if (state.darts.winner === i && !mickeyClosed(i)) state.darts.winner = null;
+    save();
+    renderDarts();
+  });
+
+  // typing works too, when the darts view is the one on screen
+  document.addEventListener('keydown', e => {
+    if (!$('#view-darts').classList.contains('is-active')) return;
+    if (state.darts.game === 'mickey' || !$('#modal').hidden) return;
+    if (e.target.matches('input,textarea')) return;
+    if (/^[0-9]$/.test(e.key)) {
+      if (dartEntry.length < 3) dartEntry = (dartEntry + e.key).replace(/^0+(?=\d)/, '');
+      $('#dartEntry').textContent = dartEntry || '0';
+    } else if (e.key === 'Backspace') {
+      dartEntry = dartEntry.slice(0, -1);
+      $('#dartEntry').textContent = dartEntry || '0';
+    } else if (e.key === 'Enter') {
+      commitDartScore(null);
+    }
+  });
+}
+
 /* ---------------- render: teams ---------------- */
 
 function renderTeams() {
@@ -1405,6 +1778,7 @@ function renderAll() {
   renderBracket();
   renderPoints();
   renderLife();
+  renderDarts();
 }
 
 /* ---------------- simulate ---------------- */
@@ -1455,6 +1829,7 @@ function importJSON(file) {
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
         life: normalizeLife(parsed.life),
+        darts: normalizeDarts(parsed.darts),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -1669,6 +2044,7 @@ function wire() {
   wireTrace();
   wirePoints();
   wireLife();
+  wireDarts();
 }
 
 /* ---------------- boot ---------------- */

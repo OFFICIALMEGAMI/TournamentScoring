@@ -26,6 +26,12 @@ then open http://localhost:5599
   score and glides cards into place. The clear leader gets a badge, and totals can
   go negative for penalties. Clicking `+` updates that one card in place — the board
   is never rebuilt, so nothing scrolls or re-animates under your cursor.
+- **Darts** - three games on their own page. **501** and **301** count down from a
+  typed turn total with a keypad and quick-score buttons; going below zero (or
+  landing on one with double out) is a bust and the score stays put. **Mickey Mouse**
+  is the marks game: close 20 down to 15 (or 12) plus the bull, three marks each,
+  first to close everything wins. Undo covers the last turn, and averages, turn
+  counts and an on-a-finish flag show on every player card.
 - **MTG** - a Commander life counter. Two to six seats, each panel rotated to face
   its own chair, starting life 20/30/40, and big tap targets at both ends of every
   panel for gaining and losing life. The chips are commander damage from each

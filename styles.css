@@ -699,6 +699,87 @@ main{padding:26px 22px 70px;max-width:1560px;margin:0 auto}
 }
 @keyframes pulseLethal{50%{box-shadow:0 0 0 5px rgba(255,255,255,.15)}}
 
+/* ---------- darts ---------- */
+.darts-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:12px 16px;margin-bottom:18px;
+}
+#countdownPanel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,330px);gap:20px;align-items:start}
+@media (max-width:900px){#countdownPanel{grid-template-columns:1fr}}
+.dart-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.dart-player{
+  padding:16px;border-radius:var(--r-lg);text-align:center;
+  background:linear-gradient(150deg,var(--glass),rgba(255,255,255,.02));
+  border:1px solid var(--stroke);
+  transition:transform .3s var(--spring),box-shadow .3s var(--ease),border-color .25s var(--ease);
+}
+.dart-player.active{
+  border-color:var(--v1);
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--v1) 45%, transparent), 0 20px 44px -28px rgba(0,0,0,.9);
+  transform:translateY(-3px);
+}
+.dart-player.won{border-color:var(--win)}
+.dp-name{font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--ink-dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-score{
+  font-family:Outfit,Inter,sans-serif;font-size:52px;font-weight:800;line-height:1;
+  letter-spacing:-2px;font-variant-numeric:tabular-nums;margin:4px 0 6px;
+}
+.dp-meta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:11px;color:var(--ink-faint)}
+.dp-meta .bust{color:var(--bad);font-weight:700}
+.dp-finish{
+  margin-top:8px;display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;padding:3px 9px;border-radius:99px;
+  background:color-mix(in srgb, var(--win) 22%, transparent);color:var(--win);
+}
+.throw-card{padding:18px}
+.dart-entry{
+  font-family:Outfit,Inter,sans-serif;font-size:46px;font-weight:800;text-align:center;
+  font-variant-numeric:tabular-nums;letter-spacing:-1px;
+  padding:8px 0 12px;color:var(--ink);
+}
+.quick-scores{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px}
+.quick-scores .quick{padding:6px 10px;font-variant-numeric:tabular-nums}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.key{
+  padding:14px 0;border-radius:var(--r-sm);cursor:pointer;
+  font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.06);border:1px solid var(--stroke);color:var(--ink);
+  transition:transform .2s var(--spring),background .2s var(--ease);
+}
+.key:hover{background:rgba(255,255,255,.13)}
+.key:active{transform:scale(.94)}
+.key[disabled]{opacity:.4;cursor:not-allowed}
+.key.wide{font-size:14px}
+.key.enter{
+  grid-column:span 3;font-size:15px;letter-spacing:.4px;
+  background:linear-gradient(135deg,var(--v1),var(--v2));color:#fff;border-color:transparent;
+}
+.standings.mickey th.target-col{
+  text-align:left;font-size:13px;font-weight:800;color:var(--ink);letter-spacing:.4px;
+  padding:9px 8px;border-top:1px solid var(--stroke);
+}
+.standings.mickey thead th{text-align:center;padding-bottom:12px}
+.standings.mickey thead th.active{color:var(--v1)}
+.standings.mickey td{text-align:center;padding:6px}
+.mark{
+  width:100%;min-width:42px;padding:8px 0;border-radius:var(--r-sm);cursor:pointer;
+  font-size:17px;font-weight:800;line-height:1.1;
+  background:rgba(255,255,255,.05);border:1px solid var(--stroke);color:var(--ink);
+  transition:background .2s var(--ease),transform .2s var(--spring),border-color .2s;
+}
+.mark:hover{background:rgba(255,255,255,.12)}
+.mark:active{transform:scale(.92)}
+.mark.part{border-color:var(--stroke-2)}
+.mark.closed{
+  background:color-mix(in srgb, var(--win) 24%, transparent);
+  border-color:var(--win);color:var(--win);
+}
+.mickey-total th,.mickey-total td{
+  font-weight:800;border-top:2px solid var(--stroke);font-variant-numeric:tabular-nums;
+}
+.mickey-total td.all{color:var(--win)}
+
 /* ---------- confirm dialog (native confirm() is unreliable in webviews) ---------- */
 .modal{
   position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:24px;
