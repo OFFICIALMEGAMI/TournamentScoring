@@ -11,13 +11,14 @@ let state = {
   teams: [],
   picks: {},                       // bracket: match key -> winning team id
   scores: {},                      // points counter: team id -> running total
+  pods: { size: 4, winPoints: 3, rounds: [] },   // commander pods
   step: 1,                         // how much the +/- buttons move
   sort: 'lineup',                  // 'lineup' keeps cards still, 'points' ranks them
   theme: 'aurora'
 };
 let editingId = null;                 // team currently being edited, or null
 let draftPhotos = [null, null];       // photos held in the form
-let draftSize = 2;                    // 2 = pair, 1 = solo entrant
+let draftSize = 1;                    // 1 = solo entrant (default), 2 = pair
 let zoom = 1;
 let lastSignature = '';               // bracket shape — entrance anims only on change
 let lastChampion = null;              // to fire confetti once per new champion
@@ -71,6 +72,7 @@ function load() {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
+        pods: normalizePods(parsed.pods),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -382,7 +384,9 @@ function renderPoints() {
   $('#pointsEmpty').hidden = any;
   $('.points-bar').hidden = !any;
   $('#scoreboard').hidden = !any;
-  $$('.step-opt').forEach(b => {
+  // scoped to this view's own switches - .step-opt is shared with the entry-type
+  // switch on the Entrants form, which must not be reset from here
+  $$('.step-opt[data-step-pick], .step-opt[data-sort-pick]').forEach(b => {
     const on = b.dataset.stepPick
       ? Number(b.dataset.stepPick) === state.step
       : b.dataset.sortPick === state.sort;
@@ -568,6 +572,300 @@ function wirePoints() {
     save();
     renderPoints();
     toast('Counters back to zero');
+  });
+}
+
+/* ---------------- commander pods ---------------- */
+
+const POD_SIZES = [3, 4, 5];
+const MIN_POD = 3;
+
+function normalizePods(raw) {
+  const out = { size: 4, winPoints: 3, rounds: [] };
+  if (!raw || typeof raw !== 'object') return out;
+  if (POD_SIZES.includes(Number(raw.size))) out.size = Number(raw.size);
+  const wp = Math.round(Number(raw.winPoints));
+  if (Number.isFinite(wp) && wp >= 0 && wp <= 20) out.winPoints = wp;
+  if (Array.isArray(raw.rounds)) {
+    out.rounds = raw.rounds
+      .filter(r => r && Array.isArray(r.pods))
+      .map(r => ({
+        pods: r.pods.filter(p => p && Array.isArray(p.players)).map(p => ({
+          players: p.players.filter(id => typeof id === 'string'),
+          winner: typeof p.winner === 'string' ? p.winner : null
+        }))
+      }));
+  }
+  return out;
+}
+
+const pairId = (a, b) => [a, b].sort().join('|');
+
+/** How often each pair has already shared a pod, so seating can spread people out. */
+function meetingCounts() {
+  const met = new Map();
+  for (const round of state.pods.rounds) {
+    for (const pod of round.pods) {
+      for (let i = 0; i < pod.players.length; i++) {
+        for (let j = i + 1; j < pod.players.length; j++) {
+          const k = pairId(pod.players[i], pod.players[j]);
+          met.set(k, (met.get(k) || 0) + 1);
+        }
+      }
+    }
+  }
+  return met;
+}
+
+function shuffled(list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Splits the field into pods as close to the chosen size as possible - Commander
+ * plays badly with a pod of two, so the remainder is spread across pods instead
+ * of left in a stub. Seating then prefers players who have not met yet.
+ */
+function seatRound() {
+  const ids = state.teams.map(t => t.id);
+  if (ids.length < MIN_POD) return null;
+
+  const podCount = Math.max(1, Math.round(ids.length / state.pods.size));
+  const base = Math.floor(ids.length / podCount);
+  let extra = ids.length - base * podCount;
+  const capacities = Array.from({ length: podCount }, () => base + (extra-- > 0 ? 1 : 0));
+
+  const met = meetingCounts();
+  const pool = shuffled(ids);
+  const standing = new Map(podStandings().map((r, i) => [r.id, i]));
+
+  return {
+    pods: capacities.map(cap => {
+      const seats = [];
+      while (seats.length < cap && pool.length) {
+        let pick = 0;
+        let best = Infinity;
+        pool.forEach((id, i) => {
+          // fewest previous meetings with this pod, then closest in the standings
+          const repeats = seats.reduce((n, other) => n + (met.get(pairId(id, other)) || 0), 0);
+          const score = repeats * 100 + (standing.get(id) || 0);
+          if (score < best) { best = score; pick = i; }
+        });
+        seats.push(pool.splice(pick, 1)[0]);
+      }
+      return { players: seats, winner: null };
+    })
+  };
+}
+
+function podStandings() {
+  const rows = new Map(state.teams.map(t => [t.id, {
+    id: t.id, team: t, games: 0, wins: 0, pts: 0
+  }]));
+  const win = Number(state.pods.winPoints) || 0;
+
+  for (const round of state.pods.rounds) {
+    for (const pod of round.pods) {
+      for (const id of pod.players) {
+        const row = rows.get(id);
+        if (row) row.games++;
+      }
+      const winner = pod.winner && rows.get(pod.winner);
+      if (winner) { winner.wins++; winner.pts += win; }
+    }
+  }
+  return Array.from(rows.values()).sort((a, b) =>
+    b.pts - a.pts || b.wins - a.wins || a.games - b.games || a.team.name.localeCompare(b.team.name));
+}
+
+/* ---------------- render: pods ---------------- */
+
+function renderPods() {
+  const enough = state.teams.length >= MIN_POD;
+  $('#podsEmpty').hidden = enough;
+  $('.pods-bar').hidden = !enough;
+  $('.pods-grid').hidden = !enough;
+  $$('.step-opt[data-pod-pick]').forEach(b => {
+    const on = Number(b.dataset.podPick) === state.pods.size;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  if (!enough) return;
+
+  $('#podWin').value = state.pods.winPoints;
+  renderPodRounds();
+  renderPodStandings();
+  updatePodsInfo();
+}
+
+function updatePodsInfo() {
+  const rounds = state.pods.rounds.length;
+  const games = state.pods.rounds.reduce((n, r) => n + r.pods.length, 0);
+  const done = state.pods.rounds.reduce((n, r) => n + r.pods.filter(p => p.winner).length, 0);
+  $('#podsInfo').innerHTML = rounds
+    ? `<b>${rounds}</b> round${rounds > 1 ? 's' : ''} · <b>${done}/${games}</b> pods decided · ${state.teams.length} entrants`
+    : `<b>${state.teams.length}</b> entrants · seat the first round to begin`;
+}
+
+function renderPodRounds() {
+  const wrap = $('#podRounds');
+  const w = words();
+  if (!state.pods.rounds.length) {
+    wrap.innerHTML = `<div class="empty"><span class="empty-ico">🃏</span>
+      No pods yet - hit <b>Seat round</b> to deal everyone into pods of ${state.pods.size}.</div>`;
+    return;
+  }
+  wrap.innerHTML = state.pods.rounds.map((round, r) => `
+    <section class="pod-round">
+      <p class="fx-round-label">${r === state.pods.rounds.length - 1 && round.final ? 'Final pod' : `${w.round} ${r + 1}`}</p>
+      <div class="pod-list">
+        ${round.pods.map((pod, i) => podHTML(pod, r, i)).join('')}
+      </div>
+    </section>`).reverse().join('');
+}
+
+function podHTML(pod, r, i) {
+  const seats = pod.players.map(id => teamById(id)).filter(Boolean);
+  const decided = !!pod.winner;
+  return `
+    <div class="pod ${decided ? 'decided' : ''}" data-round="${r}" data-pod="${i}">
+      <div class="pod-head">
+        <span>Pod ${i + 1}</span>
+        <span class="st">${decided ? 'Winner picked' : `${seats.length} players`}</span>
+      </div>
+      ${seats.map(team => {
+        const isWinner = pod.winner === team.id;
+        return `
+        <button class="seat ${isWinner ? 'winner' : ''} ${decided && !isWinner ? 'out' : ''}" data-team="${team.id}">
+          ${avatarsHTML(team, 'av')}
+          <span class="info">
+            <span class="name">${esc(team.name)}</span>
+            <span class="sub">${esc(playerLine(team))}</span>
+          </span>
+          <span class="mark">${isWinner ? '👑' : ''}</span>
+        </button>`;
+      }).join('')}
+    </div>`;
+}
+
+function renderPodStandings() {
+  const body = $('#podStandingsBody');
+  const before = new Map();
+  body.querySelectorAll('tr').forEach(tr => before.set(tr.dataset.id, tr.getBoundingClientRect()));
+
+  const list = podStandings();
+  body.innerHTML = list.map((r, i) => `
+    <tr data-id="${r.id}" class="${i === 0 && r.pts > 0 ? 'top' : ''}">
+      <td class="c"><span class="pos">${i + 1}</span></td>
+      <td class="team">
+        <div class="st-team">
+          ${avatarsHTML(r.team, 'avatars')}
+          <span class="nm"><b>${esc(r.team.name)}</b><span>${esc(playerLine(r.team))}</span></span>
+        </div>
+      </td>
+      <td class="c">${r.games}</td>
+      <td class="c">${r.wins}</td>
+      <td class="c pts">${r.pts}</td>
+    </tr>`).join('');
+
+  if (!calm && before.size) {
+    body.querySelectorAll('tr').forEach(tr => {
+      const was = before.get(tr.dataset.id);
+      if (!was) return;
+      const delta = was.top - tr.getBoundingClientRect().top;
+      if (!delta) return;
+      tr.animate([{ transform: `translateY(${delta}px)` }, { transform: 'none' }],
+        { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
+    });
+  }
+}
+
+/** Repaints one pod in place, so picking a winner never rebuilds the page. */
+function paintPod(el) {
+  const round = state.pods.rounds[Number(el.dataset.round)];
+  const pod = round && round.pods[Number(el.dataset.pod)];
+  if (!pod) return;
+  const decided = !!pod.winner;
+  el.classList.toggle('decided', decided);
+  el.querySelector('.pod-head .st').textContent =
+    decided ? 'Winner picked' : `${pod.players.length} players`;
+  el.querySelectorAll('.seat').forEach(seat => {
+    const isWinner = pod.winner === seat.dataset.team;
+    seat.classList.toggle('winner', isWinner);
+    seat.classList.toggle('out', decided && !isWinner);
+    seat.querySelector('.mark').textContent = isWinner ? '👑' : '';
+  });
+}
+
+function wirePods() {
+  $('#podRounds').addEventListener('click', e => {
+    const seat = e.target.closest('.seat');
+    if (!seat) return;
+    const el = seat.closest('.pod');
+    const round = state.pods.rounds[Number(el.dataset.round)];
+    const pod = round && round.pods[Number(el.dataset.pod)];
+    if (!pod) return;
+
+    const id = seat.dataset.team;
+    pod.winner = pod.winner === id ? null : id;
+    save();
+    paintPod(el);
+    renderPodStandings();
+    updatePodsInfo();
+
+    if (pod.winner === id && !calm) {
+      const r = seat.getBoundingClientRect();
+      spray({ x: r.left + r.width / 2, y: r.top + r.height / 2, count: 16, power: 6.5, size: .7, decay: .03 });
+    }
+  });
+
+  $('#btnSeatRound').addEventListener('click', () => {
+    const round = seatRound();
+    if (!round) return;
+    state.pods.rounds.push(round);
+    save();
+    renderPods();
+    toast(`Round ${state.pods.rounds.length} seated`);
+  });
+
+  $('#btnTopPod').addEventListener('click', () => {
+    const top = podStandings().slice(0, state.pods.size).map(r => r.id);
+    if (top.length < MIN_POD) return;
+    state.pods.rounds.push({ pods: [{ players: top, winner: null }], final: true });
+    save();
+    renderPods();
+    toast('Final pod seated with the leaders');
+  });
+
+  $('#podWin').addEventListener('input', () => {
+    const n = Math.round(Number($('#podWin').value));
+    state.pods.winPoints = Number.isFinite(n) && n >= 0 && n <= 20 ? n : 0;
+    save();
+    renderPodStandings();
+  });
+
+  $$('.step-opt[data-pod-pick]').forEach(b => b.addEventListener('click', () => {
+    state.pods.size = Number(b.dataset.podPick);
+    save();
+    renderPods();
+  }));
+
+  $('#btnResetPods').addEventListener('click', async () => {
+    if (!state.pods.rounds.length) return;
+    const ok = await askConfirm('Clear every pod round?', {
+      sub: 'Seating and winners go. Entrants, bracket and points are untouched.',
+      okLabel: 'Clear'
+    });
+    if (!ok) return;
+    state.pods.rounds = [];
+    save();
+    renderPods();
+    toast('Pods cleared');
   });
 }
 
@@ -1056,7 +1354,7 @@ function renderForm() {
 function resetForm() {
   editingId = null;
   draftPhotos = [null, null];
-  draftSize = 2;
+  draftSize = 1;
   $('#teamName').value = '';
   $$('.p-name').forEach(i => (i.value = ''));
   $('#formError').hidden = true;
@@ -1136,6 +1434,7 @@ function renderAll() {
   renderTeams();
   renderBracket();
   renderPoints();
+  renderPods();
 }
 
 /* ---------------- simulate ---------------- */
@@ -1185,6 +1484,7 @@ function importJSON(file) {
         teams: parsed.teams.map(normalizeTeam),
         picks: parsed.picks && typeof parsed.picks === 'object' ? parsed.picks : {},
         scores: normalizeScores(parsed.scores),
+        pods: normalizePods(parsed.pods),
         step: [1, 5, 10].includes(Number(parsed.step)) ? Number(parsed.step) : 1,
         sort: parsed.sort === 'points' ? 'points' : 'lineup',
         theme: THEMES.includes(parsed.theme) ? parsed.theme : 'aurora'
@@ -1398,6 +1698,7 @@ function wire() {
   wireDrag();
   wireTrace();
   wirePoints();
+  wirePods();
 }
 
 /* ---------------- boot ---------------- */

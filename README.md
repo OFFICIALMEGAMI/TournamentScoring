@@ -14,7 +14,7 @@ then open http://localhost:5599
 
 ## What it does
 
-- **Teams of two** — team name plus both participant names and a photo each.
+- **Solo or pairs** - each entrant is one person or a team of two, chosen per entry — team name plus both participant names and a photo each.
   Photos are downscaled to 400px JPEG in the browser before being stored.
 - **Seeding** — the list order is the seeding. Drag rows to re-seed, or use the
   arrows. `Shuffle` randomizes and clears results.
@@ -26,6 +26,12 @@ then open http://localhost:5599
   score and glides cards into place. The clear leader gets a badge, and totals can
   go negative for penalties. Clicking `+` updates that one card in place — the board
   is never rebuilt, so nothing scrolls or re-animates under your cursor.
+- **Pods** - Magic: the Gathering Commander style. Seat everyone into multiplayer
+  pods of 3, 4 or 5, click the last player standing to award the pod, and repeat.
+  Seating spreads people out by preferring opponents they have not met, remainders
+  are shared across pods rather than left as a stub, and standings rank on points
+  then wins then fewest games. **Final pod** seats the current leaders for the
+  decider.
 - **Simulate** — fills the remaining matches with random winners, one at a time.
 - **Winning a match** — the slot sweeps green, the photos hop, a small burst
   fires from the click, and a glowing token travels the connector line into the

@@ -44,6 +44,9 @@
     <button class="tab" data-view="bracket" role="tab">
       <span class="tab-ico">🗺️</span> Bracket
     </button>
+    <button class="tab" data-view="pods" role="tab">
+      <span class="tab-ico">🃏</span> Pods
+    </button>
     <button class="tab" data-view="points" role="tab">
       <span class="tab-ico">💯</span> Points
     </button>
@@ -93,8 +96,8 @@
         <div class="card-head">
           <h2 id="formHeading">Add a team</h2>
           <span class="step-switch" role="radiogroup" aria-label="Entry type">
-            <button class="step-opt" data-size-pick="1" role="radio" aria-checked="false">Solo</button>
-            <button class="step-opt is-on" data-size-pick="2" role="radio" aria-checked="true">Pair</button>
+            <button class="step-opt is-on" data-size-pick="1" role="radio" aria-checked="true">Solo</button>
+            <button class="step-opt" data-size-pick="2" role="radio" aria-checked="false">Pair</button>
           </span>
         </div>
 
@@ -185,6 +188,54 @@
     <div class="empty" id="bracketEmpty">
       <span class="empty-ico">🗺️</span>
       Add at least two teams and the bracket draws itself.
+    </div>
+  </section>
+
+  <!-- ================= PODS (commander) ================= -->
+  <section id="view-pods" class="view">
+    <div class="pods-bar glass">
+      <div class="bracket-info" id="podsInfo"></div>
+      <div class="head-actions">
+        <span class="step-switch" role="radiogroup" aria-label="Pod size">
+          <button class="step-opt" data-pod-pick="3" role="radio" aria-checked="false">3</button>
+          <button class="step-opt is-on" data-pod-pick="4" role="radio" aria-checked="true">4</button>
+          <button class="step-opt" data-pod-pick="5" role="radio" aria-checked="false">5</button>
+        </span>
+        <span class="pts-rules">
+          <label>Win <input id="podWin" type="number" min="0" max="20" step="1"></label>
+        </span>
+        <button class="btn primary" id="btnSeatRound">Seat round</button>
+        <button class="btn ghost sm" id="btnTopPod">Final pod</button>
+        <button class="btn ghost sm danger" id="btnResetPods">Clear pods</button>
+      </div>
+    </div>
+
+    <div class="pods-grid">
+      <div id="podRounds"></div>
+
+      <div class="glass table-card" style="--i:1">
+        <div class="card-head"><h2>Standings</h2></div>
+        <div class="table-scroll">
+          <table class="standings">
+            <thead>
+              <tr>
+                <th class="c">#</th>
+                <th>Entrant</th>
+                <th class="c" title="Games played">G</th>
+                <th class="c" title="Pod wins">W</th>
+                <th class="c" title="Points">Pts</th>
+              </tr>
+            </thead>
+            <tbody id="podStandingsBody"></tbody>
+          </table>
+        </div>
+        <p class="hint">A pod win is worth the points set above. Ties break on wins, then fewest games.</p>
+      </div>
+    </div>
+
+    <div class="empty" id="podsEmpty">
+      <span class="empty-ico">🃏</span>
+      Commander needs a table - add at least three entrants.
     </div>
   </section>
 
